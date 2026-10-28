@@ -200,10 +200,12 @@ function texts(f, st, c) {
   if (/not required/.test(st)) return ['Field available but not required by FTA.', ''];
   return ['Field not available for this transaction.', `It is recommended to capture ${f.f}.`];
 }
+const flat = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 function proposal(f, m) {
   const c = colOf(m);
   let st = '';
-  if (c) { const p = c.filled/c.total; st = p >= .98 ? 'Field is direct match' : p > 0 ? 'Need clarification/confirmation' : 'No data available' }
+  // same name (ignoring case, spaces and underscores) = direct match; any other wording = incompatible; missing data wins over both
+  if (c) { const p = c.filled/c.total, same = flat(c.name) === flat(f.f); st = p === 0 ? 'No data available' : p < .98 ? 'Need clarification/confirmation' : same ? 'Field is direct match' : 'Field exists but incompatible' }
   else if (S.cols.length) st = f.ri === 'No' ? 'Field not available, ASP can derive it' : 'Field not available';
   return {st, ex: c?.ex ?? ''};
 }

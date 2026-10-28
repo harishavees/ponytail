@@ -181,7 +181,7 @@ function step(d) {
   keep(render);
 }
 const save = () => { store.eng[store.cur] = S; try { localStorage.setItem('eigap-v2', JSON.stringify(store)) } catch (_) {} pushHist() };
-function openEng(id) { store.cur = id; S = fix(store.eng[id]); WB = null; filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false}; tab = 0; qMsg = ''; save(); render() }
+function openEng(id) { store.cur = id; S = fix(store.eng[id]); WB = null; filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false}; POS = {}; tab = 0; qMsg = ''; save(); render() }
 function addEng(s) { const id = uid(); store.eng[id] = fix(s || fresh()); openEng(id) }
 function delEng() {
   if (!confirm(`Delete engagement "${engName(S)}"? This cannot be undone (use Save project first to keep a copy).`)) return;
@@ -440,6 +440,15 @@ function fillMs(d, q = '') {
   d.querySelector('.msl').innerHTML = shown.map(([c, l]) => `<label><input type="checkbox" data-ms="${esc(c)}"${on.has(c)?' checked':''}> <b>${esc(c)}</b> ${esc(l)}</label>`).join('');
 }
 // re-render without losing the page / table scroll position
+// each tab remembers where it was scrolled (page and the mapping table) while you visit another tab
+let POS = {};
+function goTab(i) {
+  const w = document.querySelector('.wrap');
+  POS[tab] = {y:scrollY, t:w?.scrollTop, l:w?.scrollLeft};
+  tab = i; render();
+  const p = POS[i] || {y:0}, w2 = document.querySelector('.wrap');
+  scrollTo(0, p.y); if (w2 && p.t != null) { w2.scrollTop = p.t; w2.scrollLeft = p.l }
+}
 function keep(fn) {
   const y = scrollY, w = document.querySelector('.wrap'), st = w?.scrollTop, sl = w?.scrollLeft;
   fn(); scrollTo(0, y);
@@ -879,12 +888,11 @@ document.addEventListener('keydown', e => {  // Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z
 document.addEventListener('keydown', e => {  // Alt+Down = next tab, Alt+Up = previous (consultant-only tabs are skipped in client view)
   if (!e.altKey || e.ctrlKey || e.metaKey || !/^Arrow(Up|Down)$/.test(e.key)) return;
   const v = TABS.map((_, i) => i).filter(i => !(TABS[i][1] && document.body.classList.contains('client')));
-  tab = v[(v.indexOf(tab) + (e.key === 'ArrowDown' ? 1 : -1) + v.length) % v.length];
-  e.preventDefault(); render();
+  e.preventDefault(); goTab(v[(v.indexOf(tab) + (e.key === 'ArrowDown' ? 1 : -1) + v.length) % v.length]);
 });
 document.addEventListener('click', e => {
   const t = e.target, id = t.id;
-  if (t.dataset.tab) { tab = +t.dataset.tab; render() }
+  if (t.dataset.tab) goTab(+t.dataset.tab)
   else if (id === 'bClient') { document.body.classList.toggle('client'); if (document.body.classList.contains('client') && TABS[tab][1]) { tab = 0; render() } }
   else if (id === 'bSave') download(new Blob([JSON.stringify(S)], {type:'application/json'}), base() + '.json');
   else if (id === 'bPrev') document.getElementById('prev').innerHTML = slides().map(s => `<div class="pv">${slideHtml(s)}</div>`).join('');

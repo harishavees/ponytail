@@ -53,7 +53,7 @@ tr.warn td:first-child{box-shadow:inset 3px 0 var(--wa)}
 <body>
 <header>
   <h1>E-Invoicing Gap Assessment</h1>
-  <nav id="nav"></nav>
+  <nav id="nav" title="Alt+Down / Alt+Up: next / previous tab"></nav>
   <span class="sp"></span>
   <select id="eng" title="Engagement" style="width:auto;max-width:220px"></select>
   <button id="bNew">New engagement</button><button id="bDel">Delete</button>
@@ -660,6 +660,12 @@ function vRep() {
 }
 
 // ---------- events ----------
+document.addEventListener('keydown', e => {  // Alt+Down = next tab, Alt+Up = previous (consultant-only tabs are skipped in client view)
+  if (!e.altKey || e.ctrlKey || e.metaKey || !/^Arrow(Up|Down)$/.test(e.key)) return;
+  const v = TABS.map((_, i) => i).filter(i => !(TABS[i][1] && document.body.classList.contains('client')));
+  tab = v[(v.indexOf(tab) + (e.key === 'ArrowDown' ? 1 : -1) + v.length) % v.length];
+  e.preventDefault(); render();
+});
 document.addEventListener('click', e => {
   const t = e.target, id = t.id;
   if (t.dataset.tab) { tab = +t.dataset.tab; render() }

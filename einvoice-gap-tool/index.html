@@ -202,7 +202,10 @@ function texts(f, st, c) {
   return ['Field not available for this transaction.', `It is recommended to capture ${f.f}.`];
 }
 const flat = s => String(s).trim().replace(/\s+/g, ' ').toLowerCase();  // 'Invoice Number' = 'invoice number', but not 'Invoice_Number'
+const PDF = '@pdf';  // sample column value for fields the sales register lacks but the PDF invoice shows (typically seller details)
+const colLabel = c => c === PDF ? 'Available in PDF' : c;
 function proposal(f, m) {
+  if (m.col === PDF) return {st:'Field exists but incompatible', ex:''};
   const c = colOf(m);
   let st = '';
   // same name (case-insensitive; underscores and other characters count) = direct match; any other wording = incompatible; missing data wins over both
@@ -217,7 +220,7 @@ function apply(f) {
   if (!m.e.ex) m.ex = p.ex;
   const bad = (m.v || []).filter(x => !x.ok);  // a mapped column whose values break a metadata rule is not a direct match
   if (bad.length && m.st === 'Field is direct match' && !m.e.st) m.st = 'Field exists but incompatible';
-  const [g, r] = texts(f, m.st, colOf(m));
+  const [g, r] = m.col === PDF ? ['Field not in the sample data; field available in PDF.', 'Field should be mapped.'] : texts(f, m.st, colOf(m));
   const c = colOf(m), keepName = !(bad.length && c && flat(c.name) === flat(f.f));  // same name + broken rule: the name text would mislead
   if (!m.e.gap) m.gap = [keepName ? g : '', ...bad.map(x => x.t)].filter(Boolean).join(' ');
   if (!m.e.rec) m.rec = bad.length ? (r ? r + ' ' : '') + 'Correct the values that break the rule.' : r;
@@ -302,7 +305,7 @@ function readSheet(name) {
   }).filter(c => c.name.trim());
   S.meta.records = body.length;
   DATA = {hdr, body};
-  for (const f of D.F) S.map[f.n].e.col = 0;
+  for (const f of D.F) if (S.map[f.n].col !== PDF) S.map[f.n].e.col = 0;  // a new sample re-matches everything except 'Available in PDF'
   runAuto(); save(); render();
 }
 async function loadSample(file) {
@@ -405,7 +408,7 @@ function mapRow(f) {
   return `<tr data-n="${f.n}"><td>${f.n}<br><input type="checkbox" data-p="${p}ok" title="Mark as reviewed"${m.ok?' checked':''} style="width:auto"></td><td>${esc(f.g)}</td>
   <td title="${esc(f.d)}"><b>${esc(f.f)}</b><div class="sm">${esc(f.m)}${f.occ?' · '+esc(f.occ):''}${f.dt?' · '+esc(f.dt):''}${f.lv?' · lookup':''}</div>${f.rule?`<div class="sm">${esc(f.rule.slice(0,160))}</div>`:''}</td>
   <td class="sm">${hint(f)}</td>
-  <td><select data-p="${p}col">${opt(cols, m.col, 'N/A')}</select>${c?`<div class="sm">${pctOf(c)}% populated${m.e.col?'':' · auto match '+Math.min(100,Math.round(100*score(f,m.col)))+'%'}</div>`:''}</td>
+  <td><select data-p="${p}col"><option value="">N/A</option><option value="${PDF}"${m.col === PDF ? ' selected' : ''}>Available in PDF</option>${cols.map(x => `<option${x == m.col ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>${c?`<div class="sm">${pctOf(c)}% populated${m.e.col?'':' · auto match '+Math.min(100,Math.round(100*score(f,m.col)))+'%'}</div>`:''}</td>
   <td><select data-p="${p}st">${opt(ST, m.st, '— not reviewed —')}</select></td>
   <td>${ta(p+'gap', m.gap)}</td><td>${ta(p+'rec', m.rec)}</td>
   <td><select data-p="${p}code">${opt(Object.keys(RC), m.code, '—')}</select><div class="sm">${esc(RC[m.code]||'')}</div></td>
@@ -423,7 +426,7 @@ function vMap() {
     <div class="grid" style="margin-bottom:8px"><div><label>Search</label><input id="fQ" value="${esc(filt.q)}"></div>
     <div><label>FTA level</label><select id="fM">${opt(MAND, filt.m, 'All')}</select></div>
     <div><label>Group</label><select id="fG">${opt([...new Set(D.F.map(f=>f.g))], filt.g, 'All')}</select></div>
-    <div><label>Sample column</label><select id="fC">${optx(S.cols.map(x => x.name), filt.c, 'N/A (unmapped)')}</select></div>
+    <div><label>Sample column</label><select id="fC">${optx([PDF, ...S.cols.map(x => x.name)], filt.c, 'N/A (unmapped)').replace(`<option>${PDF}</option>`, `<option value="${PDF}"${filt.c === PDF ? ' selected' : ''}>Available in PDF</option>`)}</select></div>
     <div><label>Map status</label><select id="fS">${optx(ST, filt.s, '— not reviewed —')}</select></div>
     <div><label>Code</label><select id="fK">${optx(Object.keys(RC), filt.k, '— no code —')}</select></div>
     <div><label>&nbsp;</label><button id="fO">${filt.open?'Showing unconfirmed only':'Show unconfirmed only'}</button></div></div>
@@ -469,7 +472,7 @@ function render() {
 const GAPH = ['Sr. No.','FTA#','Mandatory as per FTA','Grouping','Data Dictionary Field','Field Description','Examples','ASP Mandatory','List Values','Required in Input','Usage','Sample Data Field Name','Map Status','Gap identified','Detailed Recommendation (Custom Consultation)','Example','Remarks','Recommendation code','General Recommendation','DDA Mapping ','Table Name.Filed Name'];
 function gapRows() {
   return D.F.map(f => { const m = S.map[f.n];
-    return [f.n, f.fta, f.m, f.g, f.f, f.d, f.ex, f.am, f.lv, f.ri, f.u || 'UAE PINT', m.col || 'N/A', m.st, m.gap, m.rec, m.ex, m.rem, m.code, RC[m.code] || '', '', ''] });
+    return [f.n, f.fta, f.m, f.g, f.f, f.d, f.ex, f.am, f.lv, f.ri, f.u || 'UAE PINT', colLabel(m.col) || 'N/A', m.st, m.gap, m.rec, m.ex, m.rem, m.code, RC[m.code] || '', '', ''] });
 }
 function summaryAoa() {
   const R = reviewed(), M = S.meta, pad = a => a.map(r => [null, ...r]);
@@ -658,7 +661,7 @@ function slides() {
   const nc = [...st.non.filter(r => r.f.m !== 'Optional'), ...st.non.filter(r => r.f.m === 'Optional')];
   page(nc, 9).forEach((rs, p, all) => add(`Non-Critical Gaps (${nc.length}) – Mapping & ASP Configuration`, `Fields that exist or can be defaulted by the ASP and need mapping (${p + 1} of ${all.length})`,
     [TB(.5, 1.4, [.55, 2.7, .6, 1.9, 2.7, 3.0, .88], ['SL', 'Field / Data Group', 'FTA', 'Sample Data Field Name', 'Example (From sample)', 'Recommendation', 'Treatment'], rs.map((r, i) => [{t:String(p * 9 + i + 1), a:'center'}, {t:r.f.f, s:r.f.g, b:1}, lc(r.f),
-      {t:r.m.col || '–', a:'center'}, cut(r.m.ex, 70) || '–', cut(r.m.rec || (r.m.col ? `Map ${r.m.col} to ${r.f.f}; confirm format and values.` : r.m.gap), 90), {t:[2, 4, 9].includes(+r.m.code) ? 'ASP default' : 'Map & align', b:1, a:'center', c:[2, 4, 9].includes(+r.m.code) ? CL.amber : CL.navy}]), {rowH:.52, size:8.5}),
+      {t:colLabel(r.m.col) || '–', a:'center'}, cut(r.m.ex, 70) || '–', cut(r.m.rec || (r.m.col && r.m.col !== PDF ? `Map ${r.m.col} to ${r.f.f}; confirm format and values.` : r.m.gap), 90), {t:[2, 4, 9].includes(+r.m.code) ? 'ASP default' : 'Map & align', b:1, a:'center', c:[2, 4, 9].includes(+r.m.code) ? CL.amber : CL.navy}]), {rowH:.52, size:8.5}),
      T(.5, 6.62, 12.3, .3, 'M = Mandatory  |  CM = Conditional Mandatory  |  Op = Optional  |  "–" = no field name / value in the sample data shared  |  Non-critical gaps need no new ERP field but must be mapped / configured before go-live', {size:9, italic:true, color:CL.mu})]));
   // integration
   const rc = x => /^Recommended/.test(x) ? CL.green : /^Fallback/.test(x) ? CL.amber : CL.red;
@@ -776,7 +779,7 @@ document.addEventListener('click', e => {
   else if (id === 'bRen') { const n = prompt('Client name for this engagement:', S.meta.client || ''); if (n?.trim()) { S.meta.client = n.trim(); save(); render() } }
   else if (id === 'bNew') addEng();
   else if (id === 'bDel') delEng();
-  else if (id === 'bAuto') { for (const f of D.F) S.map[f.n].e.col = 0; runAuto(); save(); render() }
+  else if (id === 'bAuto') { runAuto(); save(); render() }  // runAuto only touches columns not set by hand
   else if (id === 'fO') { filt.open = !filt.open; render() }
   else if (id === 'bXlsx') exportXlsx();
   else if (id === 'bCsv') exportCsv();

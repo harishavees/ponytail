@@ -118,7 +118,24 @@ let store = read('eigap-v2');
 if (!store?.eng) { const old = read('eigap-v1'), id = uid(); store = {cur:id, eng:{[id]: old?.map ? old : fresh()}} }  // v1 held a single engagement
 if (!store.eng[store.cur]) { store.cur = Object.keys(store.eng)[0] ?? uid(); store.eng[store.cur] ??= fresh() }
 let S = fix(store.eng[store.cur]);
-const save = () => { store.eng[store.cur] = S; try { localStorage.setItem('eigap-v2', JSON.stringify(store)) } catch (_) {} };
+// undo / redo: a snapshot of the engagement after every save; saves within 0.7 s of each other (typing) share one step
+const H = {}; let restoring = false;
+const hist = () => H[store.cur] ??= {a:[JSON.stringify(S)], i:0, t:0};
+function pushHist() {
+  if (restoring) return;
+  const h = hist(), s = JSON.stringify(S), now = Date.now();
+  if (s === h.a[h.i]) return;
+  h.a.length = h.i + 1;
+  if (now - h.t < 700 && h.i > 0) h.a[h.i] = s; else { h.a.push(s); h.i++; if (h.a.length > 60) { h.a.shift(); h.i-- } }
+  h.t = now;
+}
+function step(d) {
+  const h = hist(), i = h.i + d;
+  if (i < 0 || i >= h.a.length) return;
+  h.i = i; restoring = true; S = fix(JSON.parse(h.a[i])); save(); restoring = false;
+  keep(render);
+}
+const save = () => { store.eng[store.cur] = S; try { localStorage.setItem('eigap-v2', JSON.stringify(store)) } catch (_) {} pushHist() };
 function openEng(id) { store.cur = id; S = fix(store.eng[id]); WB = null; filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false}; tab = 0; qMsg = ''; save(); render() }
 function addEng(s) { const id = uid(); store.eng[id] = fix(s || fresh()); openEng(id) }
 function delEng() {
@@ -673,6 +690,10 @@ function vRep() {
 }
 
 // ---------- events ----------
+document.addEventListener('keydown', e => {  // Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z): undo / redo; inside a text box the browser's own undo keeps working
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || !/^[zy]$/i.test(e.key) || /^(TEXTAREA|INPUT)$/.test(document.activeElement?.tagName) && document.activeElement.type !== 'checkbox' && document.activeElement.type !== 'file') return;
+  e.preventDefault(); step(/y/i.test(e.key) || e.shiftKey ? 1 : -1);
+});
 document.addEventListener('keydown', e => {  // Alt+Down = next tab, Alt+Up = previous (consultant-only tabs are skipped in client view)
   if (!e.altKey || e.ctrlKey || e.metaKey || !/^Arrow(Up|Down)$/.test(e.key)) return;
   const v = TABS.map((_, i) => i).filter(i => !(TABS[i][1] && document.body.classList.contains('client')));

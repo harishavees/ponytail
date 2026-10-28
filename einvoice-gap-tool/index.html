@@ -31,7 +31,7 @@ tr.warn td:first-child{box-shadow:inset 3px 0 var(--wa)}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
 .kpi{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px}.kpi b{font-size:24px;display:block}
 .bar{display:flex;height:16px;border-radius:3px;overflow:hidden;background:var(--bd);min-width:200px}
-.bar i{display:block}.c1{background:var(--ok)}.c2{background:var(--ac)}.c3{background:var(--er)}.c4{background:#8a97a5}.c5{background:#c28a00}.c6{background:#b9c0c9}
+.bar i{display:block}.c1{background:var(--ok)}.c2{background:var(--ac)}.c3{background:var(--er)}.c4{background:#8a97a5}.c5{background:#c28a00}
 .leg span{margin-right:14px}.leg i{display:inline-block;width:10px;height:10px;margin-right:4px;border-radius:2px}
 .cons-only{}body.client .cons-only{display:none!important}
 .n{text-align:right}.tag{display:inline-block;padding:0 6px;border-radius:9px;background:var(--bd);font-size:11px}
@@ -95,7 +95,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 <script>
 "use strict";
 const D = JSON.parse(document.getElementById('data').textContent);
-const ST = ['Field is direct match','Field is direct match, Enrichment required','Field is indirect match','Field exists but incompatible','Incompatible data, ASP can derive it','Need clarification/confirmation','Field not available','Field not available, ASP can derive it','Field not available, ASP can default it','No data available','No data available, ASP can default it','Can be configured in ASP','Field available but not required by FTA','Not applicable'];
+const ST = ['Field is direct match','Field is direct match, Enrichment required','Field is indirect match','Field exists but incompatible','Incompatible data, ASP can derive it','Need clarification/confirmation','Field not available','Field not available, ASP can derive it','Field not available, ASP can default it','No data available','No data available, ASP can default it','Can be configured in ASP','Field available but not required by FTA'];
 const RESP = {doc:['Yes','No','Partial','Not Applicable'], q:['Yes','No','Partial','Not Applicable','To Confirm'], sc:['Yes','No','Not Applicable','To Confirm']};
 const MAND = ['Mandatory','Conditional Mandatory','Optional'];
 const TABS = [['Setup'],['Questionnaire'],['Mapping',1],['Dashboard',1],['Report',1]];
@@ -105,7 +105,7 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 // ---------- state: several engagements, kept in localStorage ----------
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const fix = s => {  // saved files may predate newer fields or the default remarks
-  for (const f of D.F) { const m = s.map[f.n] ??= {col:'',st:'',gap:'',rec:'',code:'',ex:'',rem:'',e:{}}; if (!m.e.rem) m.rem = f.md || '' }
+  for (const f of D.F) { const m = s.map[f.n] ??= {col:'',st:'',gap:'',rec:'',code:'',ex:'',rem:'',e:{}}; if (!m.e.rem) m.rem = f.md || ''; if (m.st === 'Not applicable') { m.st = ''; m.e.st = 0 } }
   s.rep ??= {};
   return s;
 };
@@ -166,7 +166,7 @@ function runAuto() {
 const colOf = m => S.cols.find(c => c.name === m.col);
 const pctOf = c => c.total ? Math.round(100*c.filled/c.total) : 0;
 function codeFor(f, st) {
-  if (!st || st === 'Need clarification/confirmation' || st === 'Not applicable') return '';
+  if (!st || st === 'Need clarification/confirmation') return '';
   if (/ASP can derive|Incompatible data/.test(st)) return 4;
   if (/default|configured in ASP/.test(st)) return 2;
   if (/not available|No data/.test(st)) return f.m==='Optional' ? 8 : f.m==='Mandatory' ? (f.lv?5:3) : (f.lv?6:7);
@@ -174,7 +174,6 @@ function codeFor(f, st) {
 }
 function texts(f, st, c) {
   if (!st) return ['',''];
-  if (st === 'Not applicable') return ['Not applicable to this client.', ''];
   if (c && /direct|indirect/.test(st)) return [`Mapped to ${c.name} (${pctOf(c)}% populated in sample).`, ''];
   if (st === 'Field exists but incompatible') return [`Sample column "${c?.name||''}" holds this data under a different name or format.`, 'Field should be mapped.'];
   if (st === 'Need clarification/confirmation') return [`Sample column "${c?.name||''}" is populated in only ${c?pctOf(c):0}% of records.`, 'Client to confirm the source and complete the missing values.'];
@@ -315,7 +314,7 @@ function mapRow(f) {
   return `<tr><td>${f.n}<br><input type="checkbox" data-p="${p}ok" title="Mark as reviewed"${m.ok?' checked':''} style="width:auto"></td><td>${esc(f.g)}</td>
   <td title="${esc(f.d)}"><b>${esc(f.f)}</b><div class="sm">${esc(f.m)}${f.occ?' · '+esc(f.occ):''}${f.dt?' · '+esc(f.dt):''}${f.lv?' · lookup':''}</div>${f.rule?`<div class="sm">${esc(f.rule.slice(0,160))}</div>`:''}</td>
   <td class="sm">${hint(f)}</td>
-  <td><select data-p="${p}col">${opt(cols, m.col, '— none —')}</select>${c?`<div class="sm">${pctOf(c)}% populated${m.e.col?'':' · auto match '+Math.min(100,Math.round(100*score(f,m.col)))+'%'}</div>`:''}</td>
+  <td><select data-p="${p}col">${opt(cols, m.col, 'N/A')}</select>${c?`<div class="sm">${pctOf(c)}% populated${m.e.col?'':' · auto match '+Math.min(100,Math.round(100*score(f,m.col)))+'%'}</div>`:''}</td>
   <td><select data-p="${p}st">${opt(ST, m.st, '— not reviewed —')}</select></td>
   <td>${ta(p+'gap', m.gap)}</td><td>${ta(p+'rec', m.rec)}</td>
   <td><select data-p="${p}code">${opt(Object.keys(RC), m.code, '—')}</select><div class="sm">${esc(RC[m.code]||'')}</div></td>
@@ -333,7 +332,6 @@ function vMap() {
     <div class="grid" style="margin-bottom:8px"><div><label>Search</label><input id="fQ" value="${esc(filt.q)}"></div>
     <div><label>FTA level</label><select id="fM">${opt(MAND, filt.m, 'All')}</select></div>
     <div><label>Group</label><select id="fG">${opt([...new Set(D.F.map(f=>f.g))], filt.g, 'All')}</select></div>
-    <div><label>&nbsp;</label><button id="bNA" title="Applies to the fields currently listed (use the filters first)">Mark listed 'not available' as Not applicable</button></div>
     <div><label>&nbsp;</label><button id="fO">${filt.open?'Showing unconfirmed only':'Show unconfirmed only'}</button></div></div>
     <div class="wrap"><table><thead><tr><th>#/Done</th><th>Group</th><th>PINT field</th><th>From questionnaire</th><th>Sample column</th><th>Map status</th><th>Gap identified</th><th>Recommendation</th><th>Code</th><th>Example</th><th>Remarks</th></tr></thead>
     <tbody id="mapBody">${rows().map(mapRow).join('')}</tbody></table></div></div>`;
@@ -348,8 +346,8 @@ function pivot(rowFn, colFn, list, colOrder) {
   return [['Row Labels', ...cols, 'Grand Total'], ...body, ['Grand Total', ...tot, tot.reduce((a,b)=>a+b,0)]];
 }
 const stOf = f => S.map[f.n].st;
-const catOf = f => { const c = +S.map[f.n].code; return S.map[f.n].st === 'Not applicable' ? 5 : !S.map[f.n].st ? 3 : c===1 ? 0 : [2,4,9].includes(c) ? 1 : c===8 ? 4 : c ? 2 : 3 };
-const CAT = ['No ERP change','ASP handles it','ERP change needed','Open / to confirm','Optional, recommended','Not applicable'], CCLS = ['c1','c2','c3','c4','c5','c6'];
+const catOf = f => { const c = +S.map[f.n].code; return !S.map[f.n].st ? 3 : c===1 ? 0 : [2,4,9].includes(c) ? 1 : c===8 ? 4 : c ? 2 : 3 };
+const CAT = ['No ERP change','ASP handles it','ERP change needed','Open / to confirm','Optional, recommended'], CCLS = ['c1','c2','c3','c4','c5'];
 
 function vDash() {
   const R = reviewed(), cnt = i => D.F.filter(f => catOf(f)===i).length;
@@ -423,12 +421,13 @@ const ans = (key, i, k = 'c') => S[key][i - 1]?.[k] || '';  // 1-based question 
 function stat() {
   const rows = D.F.map(f => {
     const m = S.map[f.n], st = m.st;
-    const k = !st ? 'open' : st === 'Not applicable' ? 'na' : GAP_ST.includes(st) ? (f.m === 'Optional' ? 'rec' : 'crit') : 'non';
+    // a Conditional Mandatory field counts as a critical gap only once the consultant has ticked Done (= it applies to this client)
+    const k = !st ? 'open' : GAP_ST.includes(st) ? (f.m === 'Mandatory' || (f.m === 'Conditional Mandatory' && m.ok) ? 'crit' : 'rec') : 'non';
     return {f, m, st, k};
   });
   const by = k => rows.filter(r => r.k === k), crit = by('crit'), non = by('non'), lv = (l, a) => a.filter(r => r.f.m === l).length;
-  const M = rows.filter(r => r.f.m === 'Mandatory' && r.k !== 'na');
-  return {rows, crit, non, app:[...crit, ...non], open:by('open').length, rec:by('rec').length, na:by('na').length,
+  const M = rows.filter(r => r.f.m === 'Mandatory');
+  return {rows, crit, non, app:[...crit, ...non], open:by('open').length, rec:by('rec').length,
     critM:lv('Mandatory', crit), critCM:lv('Conditional Mandatory', crit), nonM:lv('Mandatory', non), nonCM:lv('Conditional Mandatory', non), nonO:lv('Optional', non),
     nM:M.length, ready:M.filter(r => DIRECT.test(r.st)).length, asp:non.filter(r => [2, 4, 9].includes(+r.m.code)).length};
 }
@@ -531,7 +530,7 @@ function slides() {
      [{t:'Conditional Mandatory (CM)', c:CL.amber, b:1}, 'Required only when a stated condition applies – e.g., credit note, card payment, credit transfer, period billing', {t:String(st.critCM + st.nonCM), b:1, a:'center'}, 'Populate where the scenario applies'],
      [{t:'Critical gap', c:CL.red, b:1}, 'M / CM field not available in the current invoice data', {t:String(st.crit.length), b:1, c:CL.red, a:'center'}, 'New ERP field and data capture – immediate action'],
      [{t:'Non-critical gap', c:CL.amber, b:1}, 'Field exists but needs PINT AE mapping, or can be defaulted / derived by the ASP', {t:String(st.non.length), b:1, a:'center'}, 'Mapping or ASP configuration']], {rowH:.85, size:10.5}),
-    T(.5, 5.4, 12.3, .7, `Each field carries one FTA requirement level (M / CM) and one gap severity (Critical / Non-critical). Totals reconcile to the ${st.app.length} applicable fields in the detailed workings; ${st.nonO} optional field(s) are available in the client's data and recommended for inclusion; ${st.na} field(s) were marked not applicable.`, {size:10, italic:true, color:CL.mu})]);
+    T(.5, 5.4, 12.3, .7, `Each field carries one FTA requirement level (M / CM) and one gap severity (Critical / Non-critical). Totals reconcile to the ${st.app.length} applicable fields in the detailed workings; ${st.nonO} optional field(s) are available in the client's data and recommended for inclusion; ${st.rec} Optional or unconfirmed Conditional Mandatory field(s) absent from the client's data are not counted.`, {size:10, italic:true, color:CL.mu})]);
   // 7 results
   const tot = st.app.length || 1, cp = Math.round(100 * st.crit.length / tot);
   add('Gap Assessment Results', `Gap severity across the ${st.app.length} applicable FTA fields in the detailed workings`, [{k:'donut', x:.9, y:1.5, w:4.6, h:4.6, data:[[st.crit.length, CL.red], [st.non.length, CL.blue]]},
@@ -559,8 +558,8 @@ function slides() {
   const cr = [...st.crit.filter(r => r.f.m === 'Mandatory'), ...st.crit.filter(r => r.f.m !== 'Mandatory')];
   page(cr, 9).forEach((rs, p, all) => add(`Critical Gaps (${cr.length}) – Required Actions`, `Fields not available in current data – new ERP field and data capture required (${p + 1} of ${all.length})`,
     [TB(.5, 1.4, [.6, 2.9, .75, 3.9, 3.4, .78], ['SL', 'Field / Area', 'M / CM', 'Required Action / Recommendation', 'Remarks', 'Priority'], rs.map((r, i) => [{t:String(p * 9 + i + 1), a:'center'}, {t:r.f.f, s:r.f.g, b:1}, lc(r.f),
-      cut(r.m.rec, 120), cut(r.m.rem, 100), {t:r.f.m === 'Mandatory' || r.m.ok ? 'Immediate' : 'Conditional', b:1, a:'center', c:r.f.m === 'Mandatory' || r.m.ok ? CL.red : CL.amber}]), {rowH:.52, size:8.5}),
-     T(.5, 6.62, 12.3, .3, 'M = Mandatory  |  CM = Conditional Mandatory  |  Immediate = required before go-live  |  Conditional = CM field not yet confirmed as applicable to the client', {size:9, italic:true, color:CL.mu})], true));
+      cut(r.m.rec, 120), cut(r.m.rem, 100), {t:'Immediate', b:1, a:'center', c:CL.red}]), {rowH:.52, size:8.5}),
+     T(.5, 6.62, 12.3, .3, 'M = Mandatory  |  CM = Conditional Mandatory  |  Immediate = required before go-live', {size:9, italic:true, color:CL.mu})], true));
   // non-critical gaps
   const nc = [...st.non.filter(r => r.f.m !== 'Optional'), ...st.non.filter(r => r.f.m === 'Optional')];
   page(nc, 9).forEach((rs, p, all) => add(`Non-Critical Gaps (${nc.length}) – Mapping & ASP Configuration`, `Fields that exist or can be defaulted by the ASP and need mapping (${p + 1} of ${all.length})`,
@@ -577,7 +576,7 @@ function slides() {
   add('Recommended Action Plan', 'Implementation roadmap from critical-gap closure to go-live', ac.flatMap((r, i) => { const y = 1.45 + i * ph; return [R(.5, y + .02, .5, .5, CL.navy, {ell:1}), T(.5, y + .12, .5, .3, String(i + 1), {size:14, bold:true, color:CL.white, align:'center', font:'Cambria'}),
     T(1.3, y + .12, 1.9, .3, r[0] || '', {size:12, bold:true}), T(3.3, y + .02, 6.7, .55, r[1] || '', {size:11}), R(10.2, y + .08, 2.63, .4, CL.card, {r:.2}), T(10.2, y + .15, 2.63, .3, r[2] || '', {size:10, bold:true, align:'center'}), {k:'hr', x:.5, y:y + ph - .1, w:12.33, color:CL.line}] }));
   // sample invoice
-  const fv = n => { const f = D.F.find(x => x.f === n); if (!f) return [n, '–']; const m = S.map[f.n]; return GAP_ST.includes(m.st) ? [n, {t:'Not available', c:CL.red, b:1}] : m.st === 'Not applicable' ? [n, {t:'Not applicable', c:CL.mu}] : [n, cut(m.ex, 34) || '–'] };
+  const fv = n => { const f = D.F.find(x => x.f === n); if (!f) return [n, '–']; const m = S.map[f.n]; return GAP_ST.includes(m.st) ? [n, {t:'Not available', c:CL.red, b:1}] : [n, cut(m.ex, 34) || '–'] };
   const kv = (x, y, w, title, names) => [T(x, y, w, .25, title.toUpperCase(), {size:9, bold:true, ls:1}), {k:'hr', x, y:y + .27, w, color:CL.navy},
     ...names.flatMap((n, i) => { const [l, v] = fv(n), yy = y + .33 + i * .24, vt = typeof v === 'object' ? v : {t:v}; return [T(x, yy, w * .5, .24, l.replace(/^(Seller|Buyer) /, ''), {size:8, color:CL.mu}), T(x + w * .5, yy, w * .5, .24, vt.t, {size:8, color:vt.c || CL.navy, bold:vt.b})] })];
   add('Sample Tax Invoice (Human Readable)', 'PINT AE field mapping – values from the first record of the sample data', [...kv(.5, 1.4, 3.0, 'Seller', ['Seller Name', 'Seller Vat Identifier', 'Seller Vat Scheme Code', 'Seller Legal Registration Identifier', 'Seller Legal Registration Type', 'Seller Address Line 1', 'Seller City', 'Seller Country Subdivision', 'Seller Country Code', 'Seller Electronic Address']),
@@ -651,10 +650,10 @@ function printPdf() { document.getElementById('printRoot').innerHTML = slidesHtm
 function vRep() {
   const st = stat();
   return `<div class="card"><h2>Report</h2>
-    <p class="mu">${st.open ? `<b style="color:var(--wa)">${st.open} of ${D.F.length} fields have no Map Status yet</b> and are left out of every count. Upload a sample on the Mapping tab, or set statuses, first. ` : ''}Counts: ${st.crit.length} critical gaps (${st.critM} M + ${st.critCM} CM), ${st.non.length} non-critical, ${st.rec} optional fields not in the client data, ${st.na} not applicable.</p>
+    <p class="mu">${st.open ? `<b style="color:var(--wa)">${st.open} of ${D.F.length} fields have no Map Status yet</b> and are left out of every count. Upload a sample on the Mapping tab, or set statuses, first. ` : ''}Counts: ${st.crit.length} critical gaps (${st.critM} M + ${st.critCM} CM), ${st.non.length} non-critical, ${st.rec} Optional / unconfirmed Conditional Mandatory fields absent from the client data (not counted).</p>
     <div class="grid"><div><label>Report date (blank = today)</label>${inp('meta.repDate', S.meta.repDate || '')}</div></div><p>
     <button id="bPrev">Preview slides</button> <button class="pri" id="bPptx">Download PPTX</button> <button class="pri" id="bPdf">Download PDF</button></p>
-    <p class="sm">PDF opens the browser print dialog: choose <i>Save as PDF</i>, margins <i>None</i>, and tick <i>Background graphics</i>. A field is a critical gap when it is Mandatory or Conditional Mandatory with status "Field not available" / "No data available"; mark fields that do not apply as <i>Not applicable</i> on the Mapping tab first.</p></div>
+    <p class="sm">PDF opens the browser print dialog: choose <i>Save as PDF</i>, margins <i>None</i>, and tick <i>Background graphics</i>. A field is a critical gap when it is Mandatory or Conditional Mandatory with status "Field not available" / "No data available"; for Conditional Mandatory fields, tick <i>Done</i> on the Mapping tab for each one that applies to the client (unticked ones are left out).</p></div>
   <div class="card"><h2>Narrative pages (editable)</h2><p class="sm">Prefilled from the checklist answers and the standard wording; edit freely. Tables: one row per line, columns separated by <b>|</b>. Tokens filled in at export: {client} {system} {critical} {critM} {critCM} {noncrit} {applicable} {mapping} {asp} {ready} {nM} {readyPct}.</p>
     ${NARR.map(([k, l, r]) => `<details style="margin-bottom:6px"><summary>${esc(l)}${S.rep[k] != null ? ' <span class="tag">edited</span>' : ''}</summary><textarea data-rep="${k}" rows="${r}" style="margin-top:4px">${esc(nv(k))}</textarea><button data-reset="${k}">Reset to default</button></details>`).join('')}</div>
   <div id="prev"></div>`;
@@ -666,10 +665,6 @@ document.addEventListener('click', e => {
   if (t.dataset.tab) { tab = +t.dataset.tab; render() }
   else if (id === 'bClient') { document.body.classList.toggle('client'); if (document.body.classList.contains('client') && TABS[tab][1]) { tab = 0; render() } }
   else if (id === 'bSave') download(new Blob([JSON.stringify(S)], {type:'application/json'}), base() + '.json');
-  else if (id === 'bNA') {
-    const l = rows().filter(f => GAP_ST.includes(S.map[f.n].st) && !S.map[f.n].e.st);
-    if (l.length && confirm(`Set ${l.length} listed field(s) with status "Field not available" / "No data available" to "Not applicable"?`)) { for (const f of l) { const m = S.map[f.n]; m.st = 'Not applicable'; m.e.st = 1; m.e.gap = m.e.rec = m.e.code = 0; apply(f) } save(); render() }
-  }
   else if (id === 'bPrev') document.getElementById('prev').innerHTML = slides().map(s => `<div class="pv">${slideHtml(s)}</div>`).join('');
   else if (id === 'bPptx') exportPptx().catch(err => alert('Could not build the PPTX: ' + err.message));
   else if (id === 'bPdf') printPdf();

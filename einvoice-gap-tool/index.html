@@ -56,7 +56,7 @@ tr.warn td:first-child{box-shadow:inset 3px 0 var(--wa)}
   <nav id="nav" title="Alt+Down / Alt+Up: next / previous tab"></nav>
   <span class="sp"></span>
   <select id="eng" title="Engagement" style="width:auto;max-width:220px"></select>
-  <button id="bNew">New engagement</button><button id="bDel">Delete</button>
+  <button id="bRen">Rename</button><button id="bNew">New engagement</button><button id="bDel">Delete</button>
   <button id="bClient" title="Hide consultant-only tabs before sending the file to the client">Client view</button>
   <button id="bSave">Save project</button>
   <label class="btn" style="margin:0;color:var(--tx)" title="Opens the file as a new engagement">Open project<input id="fOpen" type="file" accept=".json" class="hid"></label>
@@ -675,6 +675,7 @@ document.addEventListener('click', e => {
   else if (id === 'bPptx') exportPptx().catch(err => alert('Could not build the PPTX: ' + err.message));
   else if (id === 'bPdf') printPdf();
   else if (t.dataset.reset) { delete S.rep[t.dataset.reset]; save(); render() }
+  else if (id === 'bRen') { const n = prompt('Client name for this engagement:', S.meta.client || ''); if (n?.trim()) { S.meta.client = n.trim(); save(); render() } }
   else if (id === 'bNew') addEng();
   else if (id === 'bDel') delEng();
   else if (id === 'bAuto') { for (const f of D.F) S.map[f.n].e.col = 0; runAuto(); save(); render() }

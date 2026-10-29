@@ -249,7 +249,7 @@ function codeFor(f, st) {
   if (!st || st === 'Need clarification/confirmation') return '';
   if (/ASP can derive|Incompatible data/.test(st)) return 4;
   if (/default|configured in ASP/.test(st)) return 2;
-  if (/not available|No data/.test(st)) return f.m==='Optional' ? 8 : f.m==='Mandatory' ? (f.lv?5:3) : (f.lv?6:7);
+  if (/not available|No data/.test(st)) return f.m==='Optional' ? 8 : f.m==='Mandatory' ? (f.lk||f.lv?5:3) : (f.lk||f.lv?6:7);  // lookup = metadata list (or the gap workbook's list reference)
   return 1;
 }
 function texts(f, st, c) {

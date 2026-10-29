@@ -22,6 +22,7 @@ input,select,textarea{font:inherit;color:var(--tx);background:var(--bg);border:1
 textarea{resize:vertical;min-height:34px}
 #mapBody select{min-width:190px}#mapBody textarea{min-width:280px;min-height:96px;field-sizing:content}#mapBody td:nth-child(3){min-width:230px}#mapBody td:nth-child(4){min-width:170px}#mapBody td:nth-child(9) select{min-width:70px}#mapBody td:nth-child(10) textarea,#mapBody td:nth-child(11) textarea{min-width:200px}#mapBody td:nth-child(10){min-width:300px}
 td textarea{min-width:200px;field-sizing:content}#mapBody td:nth-child(9){min-width:210px}
+label.chk{display:flex;align-items:center;gap:4px;margin:2px 0}.bulk{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}.bulk select{width:auto;max-width:220px}.filt{display:flex;gap:8px;flex-wrap:nowrap;margin-bottom:8px}.filt>div{flex:1 1 0;min-width:0}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
 label{display:block;font-size:12px;color:var(--mu);margin-bottom:2px}
 .wrap{overflow:auto;max-height:72vh;border:1px solid var(--bd);border-radius:6px}
@@ -494,7 +495,7 @@ const ta = (p, v) => `<textarea data-p="${p}" rows="1">${esc(v)}</textarea>`;
 function vSetup() {
   return `<div class="card"><h2>Engagement</h2><div class="grid"><div><label>Engagement</label><select id="eng"></select></div><div><label>Client</label>${inp('meta.client', S.meta.client)}</div></div>
     <p><button id="bRen">Rename</button> <button id="bNew">New engagement</button> <button id="bDel">Delete</button> <button id="bSave">Save project</button>
-    <label class="btn" style="margin:0;color:var(--tx)" title="Opens the file as a new engagement">Open project<input id="fOpen" type="file" accept=".json" class="hid"></label></p>
+    <label class="btn" style="display:inline-block;margin:0;color:var(--tx)" title="Opens the file as a new engagement">Open project<input id="fOpen" type="file" accept=".json" class="hid"></label></p>
     <p class="sm">Each engagement is saved in this browser. <i>Save project</i> writes a .json copy (with the PDFs); <i>Open project</i> loads one as a new engagement.</p></div>
   <div class="card"><h2>How to use</h2><ol class="mu">
     <li><b>Questionnaire</b> – download the blank checklist, send the Excel to the client, then import the filled Excel back.</li>
@@ -576,7 +577,7 @@ const SEL = new Set();   // field numbers ticked for a bulk change
 const selNote = () => `${SEL.size} selected`;
 function mapRow(f) {
   const m = S.map[f.n], c = colOf(m), p = `map.${f.n}.`;
-  return `<tr data-n="${f.n}"${m.ok ? ' class="done"' : ''}><td><input type="checkbox" data-sel="${f.n}" title="Select for a bulk change"${SEL.has(f.n)?' checked':''} style="width:auto"> ${f.n}<br><input type="checkbox" data-p="${p}ok" title="Mark as reviewed"${m.ok?' checked':''} style="width:auto"></td><td>${esc(f.g)}</td>
+  return `<tr data-n="${f.n}"${m.ok ? ' class="done"' : ''}><td><b>${f.n}</b><label class="sm chk" title="Tick to include this field in a bulk change"><input type="checkbox" data-sel="${f.n}"${SEL.has(f.n)?' checked':''} style="width:auto"> Select</label><label class="sm chk" title="Mark this field as reviewed (row turns green)"><input type="checkbox" data-p="${p}ok"${m.ok?' checked':''} style="width:auto"> Done</label></td><td>${esc(f.g)}</td>
   <td title="${esc(f.d)}"><b>${esc(f.f)}</b><div class="sm">${esc(f.m)}${f.occ?' · '+esc(f.occ):''}${f.dt?' · '+esc(f.dt):''}${f.lv?' · lookup':''}</div>${f.rule?`<div class="sm">${esc(f.rule.slice(0,160))}</div>`:''}</td>
   <td class="sm">${infoCell(f)}</td>
   <td><select data-p="${p}col">${colOpts(m.col)}</select>${m.imp ? `<div class="sm">Imported: ${esc(m.imp)}</div>` : ''}${c?`<div class="sm">${pctOf(c)}% populated${m.e.col?'':' · auto match '+Math.min(100,Math.round(100*score(f,plain(m.col))))+'%'}</div>`:''}</td>
@@ -610,17 +611,17 @@ function vMap() {
   const stale = '';
   return `<p class="sm">${n('inv') ? n('inv') + ' invoice sample columns' : 'No invoice sample'} · ${n('cm') ? n('cm') + ' customer master columns' : 'no customer master'} (load them in the Data import tab). <button id="bAuto">Re-run auto-match</button> keeps every column you set by hand.${stale}</p>
   <div class="card"><h2>Field mapping <span class="tag">${rows().length} of ${D.F.length} fields</span></h2>
-    <div class="grid" style="margin-bottom:8px"><div><label>Search</label><input id="fQ" value="${esc(filt.q)}"></div>
+    <div class="filt"><div><label>Search</label><input id="fQ" value="${esc(filt.q)}"></div>
     <div><label>FTA level</label><select id="fM">${opt(MAND, filt.m, 'All')}</select></div>
     <div><label>Group</label><select id="fG">${opt([...new Set(D.F.map(f=>f.g))], filt.g, 'All')}</select></div>
     <div><label>Sample column</label><select id="fC">${colOpts(filt.c, `<option value="">All</option><option value="@none"${filt.c === '@none' ? ' selected' : ''}>Not Available (unmapped)</option>`)}</select></div>
     <div><label>Map status</label><select id="fS">${optx(ST, filt.s, '— not reviewed —')}</select></div>
     <div><label>Code</label><select id="fK">${optx(Object.keys(RC), filt.k, '— no code —')}</select></div>
     <div><label>&nbsp;</label><button id="fO">${filt.open?'Showing unconfirmed only':'Show unconfirmed only'}</button></div></div>
-    <div class="card" style="margin:0 0 8px"><b id="selN">${selNote()}</b> <button id="bSelAll">Select all listed</button> <button id="bSelNone">Clear</button>
-      <label style="display:inline">Sample column</label> <select id="bulkCol"><option value="@keep">— leave unchanged —</option><option value="">Not Available</option><option value="${PDF}">Available in PDF</option></select>
-      <label style="display:inline">Map status</label> <select id="bulkSt">${opt(ST, '@keep', '— leave unchanged —').replace('<option value="">','<option value="@keep">')}</select>
-      <button id="bBulk" class="pri">Apply to selected</button><span class="sm"> Several fields can't share one sample column, so only Not Available / Available in PDF apply in bulk; pick real columns per row.</span></div>
+    <div class="bulk"><b id="selN">${selNote()}</b> <button id="bSelAll" title="Ticks every row matching the filters above">Select filtered rows</button> <button id="bSelNone">Clear</button> <button id="bBulk" class="pri">Apply to selected</button>
+      <select id="bulkCol" title="Sample column for the selected rows"><option value="@keep">Sample column: unchanged</option><option value="">Not Available</option><option value="${PDF}">Available in PDF</option></select>
+      <select id="bulkSt" title="Map status for the selected rows">${opt(ST, '@keep', 'Map status: unchanged').replace('<option value="">','<option value="@keep">')}</select>
+      <span class="sm">Bulk sample column: Not Available / Available in PDF only (one column serves one field).</span></div>
     <div class="wrap"><table><thead><tr><th>#/Done</th><th>Group</th><th>PINT field</th><th>Client information</th><th>Sample column</th><th>Map status</th><th>Gap identified</th><th>Recommendation</th><th>Code</th><th>Example</th><th>Remarks</th><th>Auto reset</th></tr></thead>
     <tbody id="mapBody">${rows().map(mapRow).join('')}</tbody></table></div></div>`;
 }
@@ -655,8 +656,8 @@ function vDash() {
 
 function render() {
   document.getElementById('nav').innerHTML = TABS.map((t,i) => `<button class="${i==tab?'on ':''}${t[1]?'cons-only':''}" data-tab="${i}">${t[0]}</button>`).join('');
-  renderEng();
   document.getElementById('app').innerHTML = [vSetup, vCompany, vQ, vSamples, vImport, vMap, () => vDash() + vRep()][tab]();
+  renderEng();
 }
 
 // ---------- export ----------

@@ -305,7 +305,8 @@ function validateAll() {
   for (const f of D.F) {   // per-column rules written in the metadata
     const v = get(f.f); if (!v) continue;
     const tests = [];
-    if (/YYYY-MM-DD/i.test(f.rl)) tests.push(['Date format YYYY-MM-DD', x => x instanceof Date || /^\d{4}-\d{2}-\d{2}$/.test(String(x).trim())]);
+    if (f.dt === 'Double' && (f.rd || /amount|price|quantity|rate|percentage|discount|sum/i.test(f.f))) tests.push(['Numeric value', x => toNum(x) !== null]);  // a text column mapped to an amount must not pass
+    if (/YYYY-MM-DD/i.test(f.rl) || f.dt === 'Date') tests.push(['Date format YYYY-MM-DD', x => x instanceof Date || /^\d{4}-\d{2}-\d{2}$/.test(String(x).trim())]);
     if (/hh:mm:ss/i.test(f.rl)) tests.push(['Time format hh:mm:ss', x => x instanceof Date || /^\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(String(x).trim())]);
     if (/MUST NOT be negative/i.test(f.rl)) tests.push(['Must not be negative', x => { const n = toNum(x); return n === null || n >= 0 }]);
     if (/positive number above zero/i.test(f.rl)) tests.push(['Must be above zero', x => { const n = toNum(x); return n === null || n > 0 }]);
@@ -509,7 +510,8 @@ const vImport = () => importCard('inv', 'Invoice sample', 'Sales register, ledge
   + importCard('cm', 'Customer master', 'Optional. Its columns can be picked in the Mapping tab for the buyer fields (name, TRN, address…).');
 function vMap() {
   const n = s => S.cols.filter(c => srcOf(c) === s).length;
-  return `<p class="sm">${n('inv') ? n('inv') + ' invoice sample columns' : 'No invoice sample'} · ${n('cm') ? n('cm') + ' customer master columns' : 'no customer master'} (load them in the Data import tab). <button id="bAuto">Re-run auto-match</button> keeps every column you set by hand.</p>
+  const stale = S.cols.length && !DATA.inv && !DATA.cm ? ' <b style="color:var(--wa)">The files are not loaded in this session, so changing a column will not re-validate its values until you upload them again in Data import.</b>' : '';
+  return `<p class="sm">${n('inv') ? n('inv') + ' invoice sample columns' : 'No invoice sample'} · ${n('cm') ? n('cm') + ' customer master columns' : 'no customer master'} (load them in the Data import tab). <button id="bAuto">Re-run auto-match</button> keeps every column you set by hand.${stale}</p>
   <div class="card"><h2>Field mapping <span class="tag">${rows().length} of ${D.F.length} fields</span></h2>
     <div class="grid" style="margin-bottom:8px"><div><label>Search</label><input id="fQ" value="${esc(filt.q)}"></div>
     <div><label>FTA level</label><select id="fM">${opt(MAND, filt.m, 'All')}</select></div>

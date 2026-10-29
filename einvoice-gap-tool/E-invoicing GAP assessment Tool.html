@@ -474,9 +474,9 @@ function keep(fn) {
 const ruleNote = (f, m) => [['Conditional rule', f.rule], ['Calculation', f.calc], ['Rule', f.rl], ['Round off', f.rd]].filter(x => x[1]).map(([a, b]) => `<div class="sm"><b>${a}:</b> ${esc(b)}</div>`).join('')
   + (m.v || []).map(x => `<div class="sm" style="color:var(--${x.ok ? 'ok' : 'er'})">${x.ok ? '✔' : '✖'} ${esc(x.t)}</div>`).join('');
 // the Sample column choices: N/A, Available in PDF, then the columns of each loaded file
-const colOpts = (sel, extra = '') => {
+const colOpts = (sel, head = '<option value="">N/A</option>') => {
   const g = s => S.cols.filter(c => srcOf(c) === s), o = c => `<option value="${esc(c.name)}"${c.name === sel ? ' selected' : ''}>${esc(plain(c.name))}</option>`;
-  return extra + `<option value="${PDF}"${sel === PDF ? ' selected' : ''}>Available in PDF</option>` + (g('inv').length ? `<optgroup label="Invoice sample">${g('inv').map(o).join('')}</optgroup>` : '') + (g('cm').length ? `<optgroup label="Customer master">${g('cm').map(o).join('')}</optgroup>` : '');
+  return head + `<option value="${PDF}"${sel === PDF ? ' selected' : ''}>Available in PDF</option>` + (g('inv').length ? `<optgroup label="Invoice sample">${g('inv').map(o).join('')}</optgroup>` : '') + (g('cm').length ? `<optgroup label="Customer master">${g('cm').map(o).join('')}</optgroup>` : '');
 };
 function mapRow(f) {
   const m = S.map[f.n], c = colOf(m), p = `map.${f.n}.`;
@@ -492,7 +492,7 @@ function mapRow(f) {
 const preview = src => {
   const d = DATA[src], cur = +(src === 'cm' ? S.cm.hdr : S.meta.hdrRow) || 1;
   if (!d) return '<p class="sm">Upload the file again in this session to preview its rows or change the header row.</p>';
-  return `<details open><summary>First rows – choose the header row</summary><div class="wrap" style="max-height:300px;margin-top:6px"><table>${d.raw.map((r, i) => `<tr${i + 1 === cur ? ' style="background:var(--card);font-weight:600"' : ''}><td><button data-usehdr="${src}:${i + 1}"${i + 1 === cur ? ' class="on"' : ''}>${i + 1 === cur ? 'Header' : 'Row ' + (i + 1)}</button></td>${r.slice(0, 12).map(c => `<td>${esc(cut(c instanceof Date ? c.toISOString().slice(0, 10) : c, 22))}</td>`).join('')}</tr>`).join('')}</table></div></details>`;
+  return `<details open><summary>First rows – choose the header row</summary><div class="wrap" style="max-height:300px;margin-top:6px"><table style="width:max-content;min-width:100%">${d.raw.map((r, i) => `<tr${i + 1 === cur ? ' style="background:var(--card);font-weight:600"' : ''}><td style="position:sticky;left:0;background:var(--card)"><button data-usehdr="${src}:${i + 1}"${i + 1 === cur ? ' class="on"' : ''}>${i + 1 === cur ? 'Header' : 'Row ' + (i + 1)}</button></td>${r.slice(0, 40).map(c => `<td style="white-space:nowrap">${esc(cut(c instanceof Date ? c.toISOString().slice(0, 10) : c, 22))}</td>`).join('')}</tr>`).join('')}</table></div></details>`;
 };
 function importCard(src, title, note) {
   const cm = src === 'cm', wb = WBS[src], n = S.cols.filter(c => srcOf(c) === src).length;
@@ -514,7 +514,7 @@ function vMap() {
     <div class="grid" style="margin-bottom:8px"><div><label>Search</label><input id="fQ" value="${esc(filt.q)}"></div>
     <div><label>FTA level</label><select id="fM">${opt(MAND, filt.m, 'All')}</select></div>
     <div><label>Group</label><select id="fG">${opt([...new Set(D.F.map(f=>f.g))], filt.g, 'All')}</select></div>
-    <div><label>Sample column</label><select id="fC"><option value="">All</option>${colOpts(filt.c, `<option value="@none"${filt.c === '@none' ? ' selected' : ''}>N/A (unmapped)</option>`)}</select></div>
+    <div><label>Sample column</label><select id="fC">${colOpts(filt.c, `<option value="">All</option><option value="@none"${filt.c === '@none' ? ' selected' : ''}>N/A (unmapped)</option>`)}</select></div>
     <div><label>Map status</label><select id="fS">${optx(ST, filt.s, '— not reviewed —')}</select></div>
     <div><label>Code</label><select id="fK">${optx(Object.keys(RC), filt.k, '— no code —')}</select></div>
     <div><label>&nbsp;</label><button id="fO">${filt.open?'Showing unconfirmed only':'Show unconfirmed only'}</button></div></div>

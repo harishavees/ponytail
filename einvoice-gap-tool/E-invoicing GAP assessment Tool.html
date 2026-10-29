@@ -617,12 +617,12 @@ function vMap() {
     <div><label>Sample column</label><select id="fC">${colOpts(filt.c, `<option value="">All</option><option value="@none"${filt.c === '@none' ? ' selected' : ''}>Not Available (unmapped)</option>`)}</select></div>
     <div><label>Map status</label><select id="fS">${optx(ST, filt.s, '— not reviewed —')}</select></div>
     <div><label>Code</label><select id="fK">${optx(Object.keys(RC), filt.k, '— no code —')}</select></div>
-    <div><label>&nbsp;</label><button id="fO">${filt.open?'Showing unconfirmed only':'Show unconfirmed only'}</button></div></div>
+    <div style="flex:none"><label>&nbsp;</label><button id="fO" style="white-space:nowrap">${filt.open?'Unconfirmed only ✔':'Unconfirmed only'}</button></div></div>
     <div class="bulk"><b id="selN">${selNote()}</b> <button id="bSelAll" title="Ticks every row matching the filters above">Select filtered rows</button> <button id="bSelNone">Clear</button> <button id="bBulk" class="pri">Apply to selected</button>
       <select id="bulkCol" title="Sample column for the selected rows"><option value="@keep">Sample column: unchanged</option><option value="">Not Available</option><option value="${PDF}">Available in PDF</option></select>
       <select id="bulkSt" title="Map status for the selected rows">${opt(ST, '@keep', 'Map status: unchanged').replace('<option value="">','<option value="@keep">')}</select>
       <span class="sm">Bulk sample column: Not Available / Available in PDF only (one column serves one field).</span></div>
-    <div class="wrap"><table><thead><tr><th>#/Done</th><th>Group</th><th>PINT field</th><th>Client information</th><th>Sample column</th><th>Map status</th><th>Gap identified</th><th>Recommendation</th><th>Code</th><th>Example</th><th>Remarks</th><th>Auto reset</th></tr></thead>
+    <div class="wrap" style="position:sticky;top:50px;max-height:calc(100vh - 92px)"><table><thead><tr><th>#/Done</th><th>Group</th><th>PINT field</th><th>Client information</th><th>Sample column</th><th>Map status</th><th>Gap identified</th><th>Recommendation</th><th>Code</th><th>Example</th><th>Remarks</th><th>Auto reset</th></tr></thead>
     <tbody id="mapBody">${rows().map(mapRow).join('')}</tbody></table></div></div>`;
 }
 

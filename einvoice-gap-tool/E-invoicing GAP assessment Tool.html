@@ -144,7 +144,7 @@ const D = JSON.parse(document.getElementById('data').textContent);
 const ST = ['Field is direct match','Field is direct match, Enrichment required','Field is indirect match','Field exists but incompatible','Incompatible data, ASP can derive it','Need clarification/confirmation','Field not available','Field not available, ASP can derive it','Field not available, ASP can default it','No data available','No data available, ASP can default it','Can be configured in ASP','Field available but not required by FTA'];
 const RESP = {doc:['Yes','No','Partial','Not Applicable'], q:['Yes','No','Partial','Not Applicable','To Confirm'], sc:['Yes','No','Not Applicable','To Confirm']};
 const MAND = ['Mandatory','Conditional Mandatory','Optional'];
-const TABS = [['Setup'],['Company details'],['Questionnaire'],['Samples'],['Mapping',1],['Dashboard',1],['Report',1]];
+const TABS = [['Setup'],['Company details'],['Questionnaire'],['Samples'],['Data import',1],['Mapping',1],['Dashboard',1],['Report',1]];
 const RC = Object.fromEntries(D.rc);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -152,7 +152,7 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const fix = s => {  // saved files may predate newer fields or the default remarks
   for (const f of D.F) { const m = s.map[f.n] ??= {col:'',st:'',gap:'',rec:'',code:'',ex:'',rem:'',e:{}}; if (!m.e.rem) m.rem = f.md || ''; if (m.st === 'Not applicable') { m.st = ''; m.e.st = 0 } }
-  s.rep ??= {}; s.info ??= {}; s.other ??= []; s.files ??= [];
+  s.rep ??= {}; s.cm ??= {file:'', records:'', hdr:1}; s.meta.hdrRow ??= 1; s.info ??= {}; s.other ??= []; s.files ??= [];
   return s;
 };
 const fresh = () => fix({
@@ -182,7 +182,7 @@ function step(d) {
   keep(render);
 }
 const save = () => { store.eng[store.cur] = S; try { localStorage.setItem('eigap-v2', JSON.stringify(store)) } catch (_) {} pushHist() };
-function openEng(id) { closeView(); store.cur = id; S = fix(store.eng[id]); WB = null; filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false}; POS = {}; tab = 0; qMsg = ''; save(); render() }
+function openEng(id) { closeView(); store.cur = id; S = fix(store.eng[id]); WBS = {inv:null, cm:null}; SHEET = {}; DATA = {inv:null, cm:null}; filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false}; POS = {}; tab = 0; qMsg = ''; save(); render() }
 function addEng(s) { const id = uid(); store.eng[id] = fix(s || fresh()); openEng(id) }
 function delEng() {
   if (!confirm(`Delete engagement "${engName(S)}"? This cannot be undone (use Save project first to keep a copy).`)) return;
@@ -193,16 +193,16 @@ function delEng() {
 }
 const engName = s => s.meta.client || s.meta.entity || 'Untitled engagement';
 const renderEng = () => { document.getElementById('eng').innerHTML = Object.entries(store.eng).map(([id, s]) => `<option value="${id}"${id===store.cur?' selected':''}>${esc(engName(s))}</option>`).join('') };
-let tab = 0, WB = null, qMsg = '', filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false};
+let tab = 0, WBS = {inv:null, cm:null}, SHEET = {}, qMsg = '', filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false};
 
 // ---------- auto-match ----------
-const SYN = {no:'number',num:'number',nbr:'number',id:'number',identifier:'number',dt:'date',amt:'amount',qty:'quantity',cust:'buyer',customer:'buyer',trx:'transaction',curr:'currency',vat:'tax',desc:'description',addr:'address',inv:'invoice',ref:'reference'};
+const SYN = {client:'buyer',no:'number',num:'number',nbr:'number',id:'number',identifier:'number',dt:'date',amt:'amount',qty:'quantity',cust:'buyer',customer:'buyer',trx:'transaction',curr:'currency',vat:'tax',desc:'description',addr:'address',inv:'invoice',ref:'reference'};
 const WEAK = ['invoice','code','type','number','registration','issue','of','the'];  // shared by most fields, so they carry no signal
 const tok = s => {
   const all = [...new Set(String(s).replace(/#/g,' number ').replace(/([a-z])([A-Z])/g,'$1 $2').replace(/\d+/g,' $& ').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).flatMap(t => t==='trn' ? ['tax','registration','number'] : [SYN[t]||t]))];
   return all.filter(t => !WEAK.includes(t)).length ? all.filter(t => !WEAK.includes(t)) : all;
 };
-const QUAL = ['seller','buyer','preceding','payment','delivery'];
+const QUAL = ['seller','buyer','preceding','payment','delivery','scheme'];
 const dice = (a,b) => a.length+b.length ? 2*a.filter(x=>b.includes(x)).length/(a.length+b.length) : 0;
 function score(f, col) {
   const ft = tok(f.f);
@@ -217,7 +217,7 @@ function score(f, col) {
 // best-scoring pairs first; a column is shared by several fields only on a (near) exact match
 function runAuto() {
   const pairs = [], used = new Set(D.F.filter(f => S.map[f.n].e.col).map(f => S.map[f.n].col));
-  for (const f of D.F) if (!S.map[f.n].e.col) { S.map[f.n].col = ''; for (const c of S.cols) pairs.push([score(f, c.name), f, c.name]) }
+  for (const f of D.F) if (!S.map[f.n].e.col) { S.map[f.n].col = ''; for (const c of S.cols) pairs.push([score(f, plain(c.name)), f, c.name]) }
   for (const [s, f, n] of pairs.sort((x, y) => y[0] - x[0])) {
     const m = S.map[f.n];
     if (s < .7) break;
@@ -239,9 +239,9 @@ function codeFor(f, st) {
 }
 function texts(f, st, c) {
   if (!st) return ['',''];
-  if (c && /direct|indirect/.test(st)) return [`Mapped to ${c.name} (${pctOf(c)}% populated in sample).`, ''];
-  if (st === 'Field exists but incompatible') return [`Sample column "${c?.name||''}" holds this data under a different name or format.`, 'Field should be mapped.'];
-  if (st === 'Need clarification/confirmation') return [`Sample column "${c?.name||''}" is populated in only ${c?pctOf(c):0}% of records.`, 'Client to confirm the source and complete the missing values.'];
+  if (c && /direct|indirect/.test(st)) return [`Mapped to ${colLabel(c.name)} (${pctOf(c)}% populated in sample).`, ''];
+  if (st === 'Field exists but incompatible') return [`Sample column "${colLabel(c?.name||'')}" holds this data under a different name or format.`, 'Field should be mapped.'];
+  if (st === 'Need clarification/confirmation') return [`Sample column "${colLabel(c?.name||'')}" is populated in only ${c?pctOf(c):0}% of records.`, 'Client to confirm the source and complete the missing values.'];
   if (/ASP can derive|Incompatible data/.test(st)) return ['Field not available in the sample.', 'ASP can derive or calculate this value.'];
   if (/default/.test(st)) return ['Field not available in the sample.', 'ASP can default this value.'];
   if (st === 'Can be configured in ASP') return ['If not provided in the data file, ASP may default the value.', ''];
@@ -250,13 +250,14 @@ function texts(f, st, c) {
 }
 const flat = s => String(s).trim().replace(/\s+/g, ' ').toLowerCase();  // 'Invoice Number' = 'invoice number', but not 'Invoice_Number'
 const PDF = '@pdf';  // sample column value for fields the sales register lacks but the PDF invoice shows (typically seller details)
-const colLabel = c => c === PDF ? 'Available in PDF' : c;
+const isCm = k => String(k).startsWith('cm:'), plain = k => String(k).replace(/^cm:/, ''), srcOf = c => c.src || 'inv';
+const colLabel = c => c === PDF ? 'Available in PDF' : isCm(c) ? 'Customer master: ' + plain(c) : c;
 function proposal(f, m) {
   if (m.col === PDF) return {st:'Field exists but incompatible', ex:infoFor(f)[0]?.v || ''};
   const c = colOf(m);
   let st = '';
   // same name (case-insensitive; underscores and other characters count) = direct match; any other wording = incompatible; missing data wins over both
-  if (c) { const p = c.filled/c.total, same = flat(c.name) === flat(f.f); st = p === 0 ? 'No data available' : p < .98 ? 'Need clarification/confirmation' : same ? 'Field is direct match' : 'Field exists but incompatible' }
+  if (c) { const p = c.filled/c.total, same = flat(plain(c.name)) === flat(f.f); st = p === 0 ? 'No data available' : p < .98 ? 'Need clarification/confirmation' : same ? 'Field is direct match' : 'Field exists but incompatible' }
   else if (S.cols.length) st = f.ri === 'No' ? 'Field not available, ASP can derive it' : 'Field not available';
   return {st, ex: c?.ex ?? ''};
 }
@@ -268,14 +269,14 @@ function apply(f) {
   const bad = (m.v || []).filter(x => !x.ok);  // a mapped column whose values break a metadata rule is not a direct match
   if (bad.length && m.st === 'Field is direct match' && !m.e.st) m.st = 'Field exists but incompatible';
   const [g, r] = m.col === PDF ? ['Field not in the sample data; field available in PDF.', 'Field should be mapped.'] : texts(f, m.st, colOf(m));
-  const c = colOf(m), keepName = !(bad.length && c && flat(c.name) === flat(f.f));  // same name + broken rule: the name text would mislead
+  const c = colOf(m), keepName = !(bad.length && c && flat(plain(c.name)) === flat(f.f));  // same name + broken rule: the name text would mislead
   if (!m.e.gap) m.gap = [keepName ? g : '', ...bad.map(x => x.t)].filter(Boolean).join(' ');
   if (!m.e.rec) m.rec = bad.length ? (r ? r + ' ' : '') + 'Correct the values that break the rule.' : r;
   if (!m.e.code) m.code = codeFor(f, m.st);
 }
 // ---------- metadata rules / calculations, checked against the loaded sample ----------
 // The rows stay in memory only; each field's results are saved in S.map[n].v. Per-column rules are read from the metadata text; calculations and cross-field rules are coded below.
-let DATA = null;
+let DATA = {inv:null, cm:null};  // the invoice sample and the customer master, kept in memory only
 const toNum = v => { if (typeof v === 'number') return v; const s = String(v).trim().replace(/,/g, ''), x = parseFloat(s); return s === '' || !isFinite(x) ? null : x };
 const near = (a, b) => Math.abs(a - b) <= .011;
 const blank = v => String(v ?? '').trim() === '';
@@ -293,9 +294,13 @@ const CROSS = [
   {t:'Vat Category Rate', n:'Vat Category Code', bad:(a, b) => blank(a) && !blank(b) && !/^(E|O)$/i.test(String(b).trim()), what:'is mandatory unless the VAT category code is E or O'}];
 function validateAll() {
   for (const f of D.F) S.map[f.n].v = [];
-  if (!DATA) return;
+  if (!DATA.inv && !DATA.cm) return;
   const cache = {}, byName = Object.fromEntries(D.F.map(f => [f.f, f]));
-  const get = name => { if (name in cache) return cache[name]; const m = byName[name] && S.map[byName[name].n], i = m?.col ? DATA.hdr.indexOf(m.col) : -1; return cache[name] = i < 0 ? null : DATA.body.map(r => r[i]) };
+  const get = (name, invOnly) => {   // a column's values; calculations only use invoice-sample columns (customer master rows are a different set)
+    const key = name + (invOnly ? '|i' : ''); if (key in cache) return cache[key];
+    const m = byName[name] && S.map[byName[name].n]; let v = null;
+    if (m?.col && m.col !== PDF) { const cm = isCm(m.col), d = DATA[cm ? 'cm' : 'inv'], i = d ? d.hdr.indexOf(plain(m.col)) : -1; if (i >= 0 && !(cm && invOnly)) v = d.body.map(r => r[i]) }
+    return cache[key] = v };
   const put = (name, bad, tested, label, ex) => { if (tested) S.map[byName[name].n].v.push({ok:!bad, t: bad ? `${label}: ${bad} of ${tested} fail (e.g. ${ex}).` : `${label}: ${tested} checked, all valid.`}) };
   for (const f of D.F) {   // per-column rules written in the metadata
     const v = get(f.f); if (!v) continue;
@@ -308,21 +313,21 @@ function validateAll() {
     for (const [label, ok] of tests) { let tested = 0, bad = 0, ex = ''; v.forEach((x, i) => { if (blank(x)) return; tested++; if (!ok(x)) { bad++; ex ||= `row ${i + 2}: ${x instanceof Date ? x.toISOString().slice(0, 10) : x}` } }); put(f.f, bad, tested, label, ex) }
   }
   for (const c of CALCS) {   // row-level calculations
-    const T = get(c.t), N = c.n.map(get); if (!T || N.some(x => !x)) continue;
-    const O = (c.o || []).map(get); let tested = 0, bad = 0, ex = '';
+    const T = get(c.t, 1), N = c.n.map(x => get(x, 1)); if (!T || N.some(x => !x)) continue;
+    const O = (c.o || []).map(x => get(x, 1)); let tested = 0, bad = 0, ex = '';
     T.forEach((x, i) => { const t = toNum(x), a = N.map(y => toNum(y[i])); if (t === null || a.some(y => y === null)) return;
       const o = O.map((y, j) => (y ? toNum(y[i]) : null) ?? c.d[j]); tested++; if (!c.ok(t, [...a, ...o])) { bad++; ex ||= `row ${i + 2}: ${t} vs ${c.what}` } });
     put(c.t, bad, tested, 'Calculation (' + c.what + ')', ex);
   }
-  const inv = get('Invoice Number');
+  const inv = get('Invoice Number', 1);
   for (const g of SUMS) {    // invoice header total = sum of its lines
-    const T = get(g.t), L = get(g.s); if (!T || !L || !inv) continue;
+    const T = get(g.t, 1), L = get(g.s, 1); if (!T || !L || !inv) continue;
     const sum = {}, head = {}; inv.forEach((id, i) => { const l = toNum(L[i]), h = toNum(T[i]); if (blank(id) || l === null || h === null) return; sum[id] = (sum[id] || 0) + l; head[id] ??= h });
     const ids = Object.keys(head), badIds = ids.filter(id => !near(head[id], sum[id]));
     put(g.t, badIds.length, ids.length, `Calculation (sum of ${g.s} per invoice)`, `invoice ${badIds[0]}: ${head[badIds[0]]} vs ${sum[badIds[0]]}`);
   }
   for (const c of CROSS) {   // cross-field conditions
-    const T = get(c.t), N = get(c.n); if (!T || !N) continue;
+    const T = get(c.t, 1), N = get(c.n, 1); if (!T || !N) continue;
     let bad = 0, ex = ''; T.forEach((x, i) => { if (c.bad(String(x ?? '').trim().toUpperCase(), String(N[i] ?? '').trim().toUpperCase())) { bad++; ex ||= `row ${i + 2}: "${x}" / ${c.n} "${N[i]}"` } });
     put(c.t, bad, T.length, 'Rule (' + c.what + ')', ex);
   }
@@ -341,25 +346,34 @@ function hint(f) {
   return `${h[1]==='q'?'Q':'Scenario '}${h[2]} (${src[1].slice(0,48)}${src[1].length>48?'…':''}): <b>${esc(a)}</b>`;
 }
 
-// ---------- sample upload ----------
-function readSheet(name) {
-  const rows = XLSX.utils.sheet_to_json(WB.Sheets[name], {header:1, raw:true, defval:''});
-  const hdr = rows[0].map(String), body = rows.slice(1);
+// ---------- sample upload: invoice sample ('inv') and customer master ('cm') ----------
+function readSheet(src, name) {
+  SHEET[src] = name;
+  const rows = XLSX.utils.sheet_to_json(WBS[src].Sheets[name], {header:1, raw:true, defval:''});
+  const h = Math.max(1, +(src === 'cm' ? S.cm.hdr : S.meta.hdrRow) || 1) - 1;   // header row chosen by the consultant
+  const hdr = (rows[h] || []).map(String), body = rows.slice(h + 1);
   const fmt = v => v instanceof Date ? v.toISOString().slice(0,10) : String(v);
-  S.cols = hdr.map((name, i) => {
+  const cols = hdr.map((n, i) => {
     const vals = body.map(r => r[i]).filter(v => String(v).trim() !== '');
-    return {name, filled:vals.length, total:body.length, ex:vals.length ? fmt(vals[0]) : ''};
-  }).filter(c => c.name.trim());
-  S.meta.records = body.length;
-  DATA = {hdr, body};
-  for (const f of D.F) if (S.map[f.n].col !== PDF) S.map[f.n].e.col = 0;  // a new sample re-matches everything except 'Available in PDF'
+    return {name:src === 'cm' ? 'cm:' + n : n, src, filled:vals.length, total:body.length, ex:vals.length ? fmt(vals[0]) : ''};
+  }).filter(c => plain(c.name).trim());
+  const other = S.cols.filter(c => srcOf(c) !== src);
+  S.cols = src === 'inv' ? [...cols, ...other] : [...other, ...cols];
+  if (src === 'cm') S.cm.records = body.length; else S.meta.records = body.length;
+  DATA[src] = {hdr, body, raw:rows.slice(0, 12)};
+  const keys = new Set(cols.map(c => c.name));
+  for (const f of D.F) { const m = S.map[f.n]; if (m.col && m.col !== PDF && isCm(m.col) === (src === 'cm') && !keys.has(m.col)) { m.col = ''; m.e.col = 0 } }  // a picked column that no longer exists
   runAuto(); save(); render();
 }
-async function loadSample(file) {
-  WB = XLSX.read(await file.arrayBuffer(), {type:'array', cellDates:true});
-  S.meta.sampleFile = file.name;
-  S.meta.sampleType = /\.csv$/i.test(file.name) ? 'CSV' : 'Excel';
-  readSheet(WB.SheetNames[0]);
+async function loadSample(src, file) {
+  WBS[src] = XLSX.read(await file.arrayBuffer(), {type:'array', cellDates:true});
+  if (src === 'cm') { S.cm.file = file.name; S.cm.hdr = 1 }
+  else { S.meta.sampleFile = file.name; S.meta.sampleType = /\.csv$/i.test(file.name) ? 'CSV' : 'Excel'; S.meta.hdrRow = 1 }
+  readSheet(src, WBS[src].SheetNames[0]);
+}
+function setHdr(src, n) {
+  if (src === 'cm') S.cm.hdr = n; else S.meta.hdrRow = n;
+  if (WBS[src]) readSheet(src, SHEET[src] || WBS[src].SheetNames[0]); else { save(); render() }
 }
 
 async function importQ(file) {
@@ -459,31 +473,48 @@ function keep(fn) {
 }
 const ruleNote = (f, m) => [['Conditional rule', f.rule], ['Calculation', f.calc], ['Rule', f.rl], ['Round off', f.rd]].filter(x => x[1]).map(([a, b]) => `<div class="sm"><b>${a}:</b> ${esc(b)}</div>`).join('')
   + (m.v || []).map(x => `<div class="sm" style="color:var(--${x.ok ? 'ok' : 'er'})">${x.ok ? '✔' : '✖'} ${esc(x.t)}</div>`).join('');
+// the Sample column choices: N/A, Available in PDF, then the columns of each loaded file
+const colOpts = (sel, extra = '') => {
+  const g = s => S.cols.filter(c => srcOf(c) === s), o = c => `<option value="${esc(c.name)}"${c.name === sel ? ' selected' : ''}>${esc(plain(c.name))}</option>`;
+  return extra + `<option value="${PDF}"${sel === PDF ? ' selected' : ''}>Available in PDF</option>` + (g('inv').length ? `<optgroup label="Invoice sample">${g('inv').map(o).join('')}</optgroup>` : '') + (g('cm').length ? `<optgroup label="Customer master">${g('cm').map(o).join('')}</optgroup>` : '');
+};
 function mapRow(f) {
   const m = S.map[f.n], c = colOf(m), p = `map.${f.n}.`;
-  const cols = S.cols.map(x => x.name);
   return `<tr data-n="${f.n}"><td>${f.n}<br><input type="checkbox" data-p="${p}ok" title="Mark as reviewed"${m.ok?' checked':''} style="width:auto"></td><td>${esc(f.g)}</td>
   <td title="${esc(f.d)}"><b>${esc(f.f)}</b><div class="sm">${esc(f.m)}${f.occ?' · '+esc(f.occ):''}${f.dt?' · '+esc(f.dt):''}${f.lv?' · lookup':''}</div>${f.rule?`<div class="sm">${esc(f.rule.slice(0,160))}</div>`:''}</td>
   <td class="sm">${infoCell(f)}</td>
-  <td><select data-p="${p}col"><option value="">N/A</option><option value="${PDF}"${m.col === PDF ? ' selected' : ''}>Available in PDF</option>${cols.map(x => `<option${x == m.col ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>${c?`<div class="sm">${pctOf(c)}% populated${m.e.col?'':' · auto match '+Math.min(100,Math.round(100*score(f,m.col)))+'%'}</div>`:''}</td>
+  <td><select data-p="${p}col">${colOpts(m.col)}</select>${c?`<div class="sm">${pctOf(c)}% populated${m.e.col?'':' · auto match '+Math.min(100,Math.round(100*score(f,plain(m.col))))+'%'}</div>`:''}</td>
   <td><select data-p="${p}st">${opt(ST, m.st, '— not reviewed —')}</select></td>
   <td>${ta(p+'gap', m.gap)}</td><td>${ta(p+'rec', m.rec)}</td>
   <td><select data-p="${p}code">${opt(Object.keys(RC), m.code, '—')}</select><div class="sm">${esc(RC[m.code]||'')}</div></td>
   <td>${f.lk ? msBox(f, m) : ta(p+'ex', m.ex)}${ruleNote(f, m)}</td><td>${ta(p+'rem', m.rem)}</td></tr>`;
 }
+const preview = src => {
+  const d = DATA[src], cur = +(src === 'cm' ? S.cm.hdr : S.meta.hdrRow) || 1;
+  if (!d) return '<p class="sm">Upload the file again in this session to preview its rows or change the header row.</p>';
+  return `<details open><summary>First rows – choose the header row</summary><div class="wrap" style="max-height:300px;margin-top:6px"><table>${d.raw.map((r, i) => `<tr${i + 1 === cur ? ' style="background:var(--card);font-weight:600"' : ''}><td><button data-usehdr="${src}:${i + 1}"${i + 1 === cur ? ' class="on"' : ''}>${i + 1 === cur ? 'Header' : 'Row ' + (i + 1)}</button></td>${r.slice(0, 12).map(c => `<td>${esc(cut(c instanceof Date ? c.toISOString().slice(0, 10) : c, 22))}</td>`).join('')}</tr>`).join('')}</table></div></details>`;
+};
+function importCard(src, title, note) {
+  const cm = src === 'cm', wb = WBS[src], n = S.cols.filter(c => srcOf(c) === src).length;
+  return `<div class="card"><h2>${title}</h2><p class="sm">${note}</p><div class="grid">
+    <div><label>Upload (.xlsx / .csv)</label><input id="${cm ? 'fCm' : 'fSample'}" type="file" accept=".xlsx,.xls,.csv"></div>
+    <div><label>Sheet</label><select id="${cm ? 'sSheetCm' : 'sSheet'}">${wb ? wb.SheetNames.map(s => `<option${s === SHEET[src] ? ' selected' : ''}>${esc(s)}</option>`).join('') : '<option>—</option>'}</select></div>
+    <div><label>File</label>${inp(cm ? 'cm.file' : 'meta.sampleFile', cm ? S.cm.file : S.meta.sampleFile)}</div>
+    <div><label>Records</label>${inp(cm ? 'cm.records' : 'meta.records', cm ? S.cm.records : S.meta.records)}</div>
+    <div><label>Header row number</label><input type="number" min="1" data-hdr="${src}" value="${cm ? S.cm.hdr : S.meta.hdrRow}"></div>
+    ${cm ? '' : `<div><label>Data dictionary available?</label><select data-p="meta.dict">${opt(['Yes', 'No'], S.meta.dict)}</select></div>`}</div>
+    <p class="sm">${n ? `${n} columns read.` : 'Nothing loaded yet.'}</p>${preview(src)}</div>`;
+}
+const vImport = () => importCard('inv', 'Invoice sample', 'Sales register, ledger or any invoice data extract.')
+  + importCard('cm', 'Customer master', 'Optional. Its columns can be picked in the Mapping tab for the buyer fields (name, TRN, address…).');
 function vMap() {
-  return `<div class="card"><h2>1. Invoice sample</h2><div class="grid">
-    <div><label>Upload invoice data extract (.xlsx / .csv)</label><input id="fSample" type="file" accept=".xlsx,.xls,.csv"></div>
-    <div><label>Sheet</label><select id="sSheet">${WB ? WB.SheetNames.map(n=>`<option>${esc(n)}</option>`).join('') : '<option>—</option>'}</select></div>
-    <div><label>Sample file</label>${inp('meta.sampleFile', S.meta.sampleFile)}</div>
-    <div><label>Records in sample</label>${inp('meta.records', S.meta.records)}</div>
-    <div><label>Data dictionary available?</label><select data-p="meta.dict">${opt(['Yes','No'], S.meta.dict)}</select></div></div>
-    <p class="sm">${S.cols.length ? `${S.cols.length} columns read. ` : 'No sample loaded yet. '}<button id="bAuto">Re-run auto-match</button> (keeps every column you set by hand)</p></div>
-  <div class="card"><h2>2. Field mapping <span class="tag">${rows().length} of ${D.F.length} fields</span></h2>
+  const n = s => S.cols.filter(c => srcOf(c) === s).length;
+  return `<p class="sm">${n('inv') ? n('inv') + ' invoice sample columns' : 'No invoice sample'} · ${n('cm') ? n('cm') + ' customer master columns' : 'no customer master'} (load them in the Data import tab). <button id="bAuto">Re-run auto-match</button> keeps every column you set by hand.</p>
+  <div class="card"><h2>Field mapping <span class="tag">${rows().length} of ${D.F.length} fields</span></h2>
     <div class="grid" style="margin-bottom:8px"><div><label>Search</label><input id="fQ" value="${esc(filt.q)}"></div>
     <div><label>FTA level</label><select id="fM">${opt(MAND, filt.m, 'All')}</select></div>
     <div><label>Group</label><select id="fG">${opt([...new Set(D.F.map(f=>f.g))], filt.g, 'All')}</select></div>
-    <div><label>Sample column</label><select id="fC">${optx([PDF, ...S.cols.map(x => x.name)], filt.c, 'N/A (unmapped)').replace(`<option>${PDF}</option>`, `<option value="${PDF}"${filt.c === PDF ? ' selected' : ''}>Available in PDF</option>`)}</select></div>
+    <div><label>Sample column</label><select id="fC"><option value="">All</option>${colOpts(filt.c, `<option value="@none"${filt.c === '@none' ? ' selected' : ''}>N/A (unmapped)</option>`)}</select></div>
     <div><label>Map status</label><select id="fS">${optx(ST, filt.s, '— not reviewed —')}</select></div>
     <div><label>Code</label><select id="fK">${optx(Object.keys(RC), filt.k, '— no code —')}</select></div>
     <div><label>&nbsp;</label><button id="fO">${filt.open?'Showing unconfirmed only':'Show unconfirmed only'}</button></div></div>
@@ -522,7 +553,7 @@ function vDash() {
 function render() {
   document.getElementById('nav').innerHTML = TABS.map((t,i) => `<button class="${i==tab?'on ':''}${t[1]?'cons-only':''}" data-tab="${i}">${t[0]}</button>`).join('');
   renderEng();
-  document.getElementById('app').innerHTML = [vSetup, vCompany, vQ, vSamples, vMap, vDash, vRep][tab]();
+  document.getElementById('app').innerHTML = [vSetup, vCompany, vQ, vSamples, vImport, vMap, vDash, vRep][tab]();
 }
 
 // ---------- export ----------
@@ -604,7 +635,7 @@ async function exportXlsx(macro) {  // macro: .xlsm whose Example dropdowns pick
     at[id] = [lr, lr + 1 + b.o.length]; lr += b.o.length + 4;
   }
   const lists = wb.addWorksheet('Lists', {state:'hidden'});
-  ['N/A', 'Available in PDF', ...S.cols.map(c => c.name)].forEach((v, i) => lists.getCell(i + 1, 1).value = v);
+  ['N/A', 'Available in PDF', ...S.cols.map(c => colLabel(c.name))].forEach((v, i) => lists.getCell(i + 1, 1).value = v);
   const rcs = wb.addWorksheet('Recommendation Coding');
   rcs.getColumn(1).width = 21.5; rcs.getColumn(2).width = 86.5;
   [['Code', 'General Recommendation'], ...D.rc].forEach((row, i) => row.forEach((v, j) => { const c = rcs.getCell(i + 1, j + 1); c.value = v; c.font = {name:'Calibri', size:11, bold:!i}; c.alignment = {horizontal:j && i ? undefined : 'center', vertical:'middle', wrapText:true} }));
@@ -944,7 +975,7 @@ function slides() {
   const nc = [...st.non.filter(r => r.f.m !== 'Optional'), ...st.non.filter(r => r.f.m === 'Optional')];
   page(nc, 9).forEach((rs, p, all) => add(`Non-Critical Gaps (${nc.length}) – Mapping & ASP Configuration`, `Fields that exist or can be defaulted by the ASP and need mapping (${p + 1} of ${all.length})`,
     [TB(.5, 1.4, [.55, 2.7, .6, 1.9, 2.7, 3.0, .88], ['SL', 'Field / Data Group', 'FTA', 'Sample Data Field Name', 'Example (From sample)', 'Recommendation', 'Treatment'], rs.map((r, i) => [{t:String(p * 9 + i + 1), a:'center'}, {t:r.f.f, s:r.f.g, b:1}, lc(r.f),
-      {t:colLabel(r.m.col) || '–', a:'center'}, cut(r.m.ex, 70) || '–', cut(r.m.rec || (r.m.col && r.m.col !== PDF ? `Map ${r.m.col} to ${r.f.f}; confirm format and values.` : r.m.gap), 90), {t:[2, 4, 9].includes(+r.m.code) ? 'ASP default' : 'Map & align', b:1, a:'center', c:[2, 4, 9].includes(+r.m.code) ? CL.amber : CL.navy}]), {rowH:.52, size:8.5}),
+      {t:colLabel(r.m.col) || '–', a:'center'}, cut(r.m.ex, 70) || '–', cut(r.m.rec || (r.m.col && r.m.col !== PDF ? `Map ${colLabel(r.m.col)} to ${r.f.f}; confirm format and values.` : r.m.gap), 90), {t:[2, 4, 9].includes(+r.m.code) ? 'ASP default' : 'Map & align', b:1, a:'center', c:[2, 4, 9].includes(+r.m.code) ? CL.amber : CL.navy}]), {rowH:.52, size:8.5}),
      T(.5, 6.62, 12.3, .3, 'M = Mandatory  |  CM = Conditional Mandatory  |  Op = Optional  |  "–" = no field name / value in the sample data shared  |  Non-critical gaps need no new ERP field but must be mapped / configured before go-live', {size:9, italic:true, color:CL.mu})]));
   // integration
   const rc = x => /^Recommended/.test(x) ? CL.green : /^Fallback/.test(x) ? CL.amber : CL.red;
@@ -1059,6 +1090,7 @@ document.addEventListener('click', e => {
   else if (id === 'bPdf') printPdf();
   else if (t.dataset.reset) { delete S.rep[t.dataset.reset]; save(); render() }
   else if (id === 'bRen') { const n = prompt('Client name for this engagement:', S.meta.client || ''); if (n?.trim()) { S.meta.client = n.trim(); save(); render() } }
+  else if (t.dataset.usehdr) { const [s, n] = t.dataset.usehdr.split(':'); setHdr(s, +n) }
   else if (t.dataset.view) viewFile(t.dataset.view);
   else if (t.dataset.rmf) removeFile(t.dataset.rmf);
   else if (id === 'bOtherAdd') { S.other.push({f:'', v:'', src:''}); save(); render() }
@@ -1096,8 +1128,9 @@ document.addEventListener('change', async e => {
   else if (t.id === 'fC') { filt.c = t.value; keep(render) }
   else if (t.id === 'fS') { filt.s = t.value; keep(render) }
   else if (t.id === 'fK') { filt.k = t.value; keep(render) }
-  else if (t.id === 'fSample' && t.files[0]) { try { await loadSample(t.files[0]) } catch (err) { alert('Could not read the sample file: ' + err.message) } }
-  else if (t.id === 'sSheet') readSheet(t.value);
+  else if ((t.id === 'fSample' || t.id === 'fCm') && t.files[0]) { try { await loadSample(t.id === 'fCm' ? 'cm' : 'inv', t.files[0]) } catch (err) { alert('Could not read the file: ' + err.message) } }
+  else if (t.id === 'sSheet' || t.id === 'sSheetCm') readSheet(t.id === 'sSheet' ? 'inv' : 'cm', t.value);
+  else if (t.dataset.hdr) setHdr(t.dataset.hdr, Math.max(1, +t.value || 1));
   else if (t.id === 'fOpen' && t.files[0]) {
     try { const j = JSON.parse(await t.files[0].text()); if (!j.map || !j.q) throw Error('not a project file'); const fl = j._files || {}; delete j._files; addEng(j);
       for (const [id, url] of Object.entries(fl)) await fput(id, await (await fetch(url)).blob()) }
@@ -1109,7 +1142,7 @@ document.addEventListener('change', async e => {
   else if (t.dataset.p && t.tagName === 'SELECT') {
     setP(t.dataset.p, t.value);
     const tr = t.closest('tr[data-n]');  // a mapping row only needs itself redrawn, unless a new column changes rule results elsewhere
-    if (DATA && /\.col$/.test(t.dataset.p)) { validateAll(); D.F.forEach(apply); save(); keep(render) }
+    if ((DATA.inv || DATA.cm) && /\.col$/.test(t.dataset.p)) { validateAll(); D.F.forEach(apply); save(); keep(render) }
     else if (tr) tr.outerHTML = mapRow(D.F.find(f => f.n == tr.dataset.n)); else keep(render);
   }
 });

@@ -589,8 +589,7 @@ async function exportXlsx(macro) {  // macro: .xlsm whose Example dropdowns pick
   const HF = ['D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'FFE699', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'FBE5D6', 'FBE5D6', 'FBE5D6', 'FBE5D6', 'FBE5D6', 'FBE5D6', '92D050', '92D050', '8EA9DB', '8EA9DB'];
   const DF = {E:'F8CBAD', F:'FFFFFF', G:'FFFFFF', L:'92D050'}, HW = 'CDJLMNOPQRS', DW = 'EFGHILMNO';
   ws.columns = W.map(width => ({width}));
-  GAPH.forEach((h, i) => { const c = ws.getCell(1, i + 1); c.value = h; c.font = {name:'Dubai', size:11, bold:true}; c.fill = fill(HF[i]); c.border = box; c.alignment = {horizontal:'center', vertical:'middle', wrapText:HW.includes('ABCDEFGHIJKLMNOPQRSTU'[i])} });
-  ws.getRow(1).height = 48;
+  GAPH.forEach((h, i) => { const c = ws.getCell(1, i + 1); c.value = h; c.font = {name:'Dubai', size:11, bold:true}; c.fill = fill(HF[i]); c.border = box; c.alignment = {horizontal:'center', vertical:'middle', wrapText:true} });  // no fixed row heights: Excel fits them to the wrapped text
   // Lookups sheet first, so dropdowns and the List Values column can point at it
   const lk = wb.addWorksheet('Lookups'), at = {};
   lk.getColumn(1).width = 38; lk.getColumn(2).width = 50;
@@ -614,7 +613,8 @@ async function exportXlsx(macro) {  // macro: .xlsm whose Example dropdowns pick
       c.value = j === 18 && row[17] !== '' ? {formula:`IFERROR(VLOOKUP(R${rr},'Recommendation Coding'!$A$2:$B$10,2,FALSE),"")`, result:v} : v === '' ? null : v;
       c.font = {name:j < 18 ? 'Dubai' : 'Calibri', size:11};
       if (j === 15) c.numFmt = '@';  // text format keeps codes such as 00000100 intact when picked from the dropdown
-      if (j < 19) { c.border = box; c.alignment = {horizontal:'center', vertical:'center', wrapText:DW.includes(L)} }
+      c.alignment = {horizontal:j < 19 ? 'center' : undefined, vertical:j < 19 ? 'center' : undefined, wrapText:true};
+      if (j < 19) c.border = box;
       if (DF[L]) c.fill = fill(DF[L]);
     });
     ws.getCell(rr, 13).dataValidation = {type:'list', allowBlank:true, formulae:['Summary!$B$10:$B$22'], showErrorMessage:true, errorTitle:'Map Status', error:'Pick a status from the list.'};
@@ -622,6 +622,13 @@ async function exportXlsx(macro) {  // macro: .xlsm whose Example dropdowns pick
     ws.getCell(rr, 18).dataValidation = {type:'list', allowBlank:true, formulae:["'Recommendation Coding'!$A$2:$A$10"], showErrorMessage:true, errorTitle:'Code', error:'Pick a code from the list.'};
     if (f.lk) ws.getCell(rr, 16).dataValidation = {type:'list', allowBlank:true, formulae:[`Lookups!$A$${at[f.lk][0] + 2}:$A$${at[f.lk][1]}`], showErrorMessage:true, errorStyle:'warning', errorTitle:'Example', error:'Not in the lookup list (several codes separated by commas are fine).', showInputMessage:true, promptTitle:D.LK[f.lk].t.slice(0, 30), prompt:macro ? 'Pick codes one at a time: each pick is added to the cell, picking the same code again removes it.' : 'Pick one code, or type several separated by commas.'};
   });
+  // fit column widths to the content (longest line, 8–60 characters; longer text wraps) and hide Field Description, Examples and List Values
+  const shown = v => String(v && v.result !== undefined ? v.result : v ?? '');
+  GAPH.forEach((h, i) => {
+    const longest = Math.max(...h.split(/\s+/).map(w => w.length), ...ws.getColumn(i + 1).values.slice(2).map(v => Math.max(0, ...shown(v).split('\n').map(l => l.length))));
+    ws.getColumn(i + 1).width = Math.min(60, Math.max(8, longest + 2));
+  });
+  for (const c of [6, 7, 9]) ws.getColumn(c).hidden = true;
   ws.autoFilter = `A1:U${D.F.length + 1}`;
   const order = ['Documents Required', 'Client Checklist', 'Transaction Scenarios', 'Summary', 'Detailed-Gap-Analysis', 'Lookups', 'Recommendation Coding', 'Lists'];
   order.forEach((n, i) => { wb.getWorksheet(n).orderNo = i });

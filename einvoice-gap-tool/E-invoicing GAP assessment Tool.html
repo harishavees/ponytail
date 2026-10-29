@@ -36,6 +36,7 @@ tr.warn td:first-child{box-shadow:inset 3px 0 var(--wa)}
 .cons-only{}body.client .cons-only{display:none!important}
 .n{text-align:right}.tag{display:inline-block;padding:0 6px;border-radius:9px;background:var(--bd);font-size:11px}
 .hid{display:none}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}.side{position:sticky;top:120px}@media (max-width:1000px){.two{grid-template-columns:1fr}.side{position:static}}
 #printRoot{display:none}
 .slide{position:relative;width:13.333in;height:7.5in;overflow:hidden;box-sizing:border-box}
 .slide .b{position:absolute;margin:0}
@@ -143,7 +144,7 @@ const D = JSON.parse(document.getElementById('data').textContent);
 const ST = ['Field is direct match','Field is direct match, Enrichment required','Field is indirect match','Field exists but incompatible','Incompatible data, ASP can derive it','Need clarification/confirmation','Field not available','Field not available, ASP can derive it','Field not available, ASP can default it','No data available','No data available, ASP can default it','Can be configured in ASP','Field available but not required by FTA'];
 const RESP = {doc:['Yes','No','Partial','Not Applicable'], q:['Yes','No','Partial','Not Applicable','To Confirm'], sc:['Yes','No','Not Applicable','To Confirm']};
 const MAND = ['Mandatory','Conditional Mandatory','Optional'];
-const TABS = [['Setup'],['Questionnaire'],['Mapping',1],['Dashboard',1],['Report',1]];
+const TABS = [['Setup'],['Company details'],['Questionnaire'],['Samples'],['Mapping',1],['Dashboard',1],['Report',1]];
 const RC = Object.fromEntries(D.rc);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -151,7 +152,7 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const fix = s => {  // saved files may predate newer fields or the default remarks
   for (const f of D.F) { const m = s.map[f.n] ??= {col:'',st:'',gap:'',rec:'',code:'',ex:'',rem:'',e:{}}; if (!m.e.rem) m.rem = f.md || ''; if (m.st === 'Not applicable') { m.st = ''; m.e.st = 0 } }
-  s.rep ??= {};
+  s.rep ??= {}; s.info ??= {}; s.other ??= []; s.files ??= [];
   return s;
 };
 const fresh = () => fix({
@@ -181,10 +182,11 @@ function step(d) {
   keep(render);
 }
 const save = () => { store.eng[store.cur] = S; try { localStorage.setItem('eigap-v2', JSON.stringify(store)) } catch (_) {} pushHist() };
-function openEng(id) { store.cur = id; S = fix(store.eng[id]); WB = null; filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false}; POS = {}; tab = 0; qMsg = ''; save(); render() }
+function openEng(id) { closeView(); store.cur = id; S = fix(store.eng[id]); WB = null; filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false}; POS = {}; tab = 0; qMsg = ''; save(); render() }
 function addEng(s) { const id = uid(); store.eng[id] = fix(s || fresh()); openEng(id) }
 function delEng() {
   if (!confirm(`Delete engagement "${engName(S)}"? This cannot be undone (use Save project first to keep a copy).`)) return;
+  S.files.forEach(f => fdel(f.id).catch(() => {}));
   delete store.eng[store.cur];
   const k = Object.keys(store.eng)[0];
   k ? openEng(k) : addEng();
@@ -250,7 +252,7 @@ const flat = s => String(s).trim().replace(/\s+/g, ' ').toLowerCase();  // 'Invo
 const PDF = '@pdf';  // sample column value for fields the sales register lacks but the PDF invoice shows (typically seller details)
 const colLabel = c => c === PDF ? 'Available in PDF' : c;
 function proposal(f, m) {
-  if (m.col === PDF) return {st:'Field exists but incompatible', ex:''};
+  if (m.col === PDF) return {st:'Field exists but incompatible', ex:infoFor(f)[0]?.v || ''};
   const c = colOf(m);
   let st = '';
   // same name (case-insensitive; underscores and other characters count) = direct match; any other wording = incompatible; missing data wins over both
@@ -445,7 +447,8 @@ let POS = {};
 function goTab(i) {
   const w = document.querySelector('.wrap');
   POS[tab] = {y:scrollY, t:w?.scrollTop, l:w?.scrollLeft};
-  tab = i; render();
+  tab = i; if (TABS[i][0] === 'Mapping') D.F.forEach(apply);
+  render();
   const p = POS[i] || {y:0}, w2 = document.querySelector('.wrap');
   scrollTo(0, p.y); if (w2 && p.t != null) { w2.scrollTop = p.t; w2.scrollLeft = p.l }
 }
@@ -461,7 +464,7 @@ function mapRow(f) {
   const cols = S.cols.map(x => x.name);
   return `<tr data-n="${f.n}"><td>${f.n}<br><input type="checkbox" data-p="${p}ok" title="Mark as reviewed"${m.ok?' checked':''} style="width:auto"></td><td>${esc(f.g)}</td>
   <td title="${esc(f.d)}"><b>${esc(f.f)}</b><div class="sm">${esc(f.m)}${f.occ?' · '+esc(f.occ):''}${f.dt?' · '+esc(f.dt):''}${f.lv?' · lookup':''}</div>${f.rule?`<div class="sm">${esc(f.rule.slice(0,160))}</div>`:''}</td>
-  <td class="sm">${hint(f)}</td>
+  <td class="sm">${infoCell(f)}</td>
   <td><select data-p="${p}col"><option value="">N/A</option><option value="${PDF}"${m.col === PDF ? ' selected' : ''}>Available in PDF</option>${cols.map(x => `<option${x == m.col ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>${c?`<div class="sm">${pctOf(c)}% populated${m.e.col?'':' · auto match '+Math.min(100,Math.round(100*score(f,m.col)))+'%'}</div>`:''}</td>
   <td><select data-p="${p}st">${opt(ST, m.st, '— not reviewed —')}</select></td>
   <td>${ta(p+'gap', m.gap)}</td><td>${ta(p+'rec', m.rec)}</td>
@@ -484,7 +487,7 @@ function vMap() {
     <div><label>Map status</label><select id="fS">${optx(ST, filt.s, '— not reviewed —')}</select></div>
     <div><label>Code</label><select id="fK">${optx(Object.keys(RC), filt.k, '— no code —')}</select></div>
     <div><label>&nbsp;</label><button id="fO">${filt.open?'Showing unconfirmed only':'Show unconfirmed only'}</button></div></div>
-    <div class="wrap"><table><thead><tr><th>#/Done</th><th>Group</th><th>PINT field</th><th>From questionnaire</th><th>Sample column</th><th>Map status</th><th>Gap identified</th><th>Recommendation</th><th>Code</th><th>Example</th><th>Remarks</th></tr></thead>
+    <div class="wrap"><table><thead><tr><th>#/Done</th><th>Group</th><th>PINT field</th><th>Client information</th><th>Sample column</th><th>Map status</th><th>Gap identified</th><th>Recommendation</th><th>Code</th><th>Example</th><th>Remarks</th></tr></thead>
     <tbody id="mapBody">${rows().map(mapRow).join('')}</tbody></table></div></div>`;
 }
 
@@ -519,7 +522,7 @@ function vDash() {
 function render() {
   document.getElementById('nav').innerHTML = TABS.map((t,i) => `<button class="${i==tab?'on ':''}${t[1]?'cons-only':''}" data-tab="${i}">${t[0]}</button>`).join('');
   renderEng();
-  document.getElementById('app').innerHTML = [vSetup, vQ, vMap, vDash, vRep][tab]();
+  document.getElementById('app').innerHTML = [vSetup, vCompany, vQ, vSamples, vMap, vDash, vRep][tab]();
 }
 
 // ---------- export ----------
@@ -647,6 +650,145 @@ function exportCsv() {
   download(new Blob(['﻿' + csv], {type:'text/csv'}), base() + '.csv');
 }
 
+
+// ---------- client information: trade licence + sample documents, mapped to PINT fields ----------
+const nrm = s => String(s).replace(/\s+/g, ' ').trim().toLowerCase();
+const FBY = new Map(D.F.map(f => [nrm(f.f), f]));
+// [key, label, section, PINT field names it feeds, type: 'text' | 'date' | 'area' | lookup list id]
+const INFO = [
+  ['legalName', 'Legal name (as on the licence)', 'Trade licence', ['Seller Name']],
+  ['tradeName', 'Trading name', 'Trade licence', ['Seller Trading name']],
+  ['licNo', 'Trade licence number', 'Trade licence', ['Seller Legal Registration Identifier', 'Seller Commercial/Trade License']],
+  ['regType', 'Legal registration type', 'Trade licence', ['Seller Legal Registration Type'], '4971'],
+  ['authority', 'Issuing authority', 'Trade licence', ['Seller Authority Name']],
+  ['licIssue', 'Licence issue date', 'Trade licence', [], 'date'],
+  ['licExpiry', 'Licence expiry date', 'Trade licence', [], 'date'],
+  ['legalForm', 'Legal form', 'Trade licence', []],
+  ['activity', 'Licensed activities', 'Trade licence', [], 'area'],
+  ['trn', 'Tax registration number (TRN)', 'Tax & e-invoicing identifiers', ['Seller Vat Identifier', 'Seller Identifier']],
+  ['vatScheme', 'VAT scheme code', 'Tax & e-invoicing identifiers', ['Seller Vat Scheme Code']],
+  ['endpoint', 'Peppol endpoint (electronic address)', 'Tax & e-invoicing identifiers', ['Seller Electronic Address']],
+  ['endpointScheme', 'Endpoint scheme identifier', 'Tax & e-invoicing identifiers', ['Seller Electronic Scheme Identifier'], '4420'],
+  ['addr1', 'Address line 1', 'Address & contact', ['Seller Address Line 1']],
+  ['addr2', 'Address line 2', 'Address & contact', ['Seller Address line 2']],
+  ['city', 'City', 'Address & contact', ['Seller City']],
+  ['emirate', 'Emirate', 'Address & contact', ['Seller Country Subdivision'], '19'],
+  ['postCode', 'Post code / PO box', 'Address & contact', ['Seller Post Code']],
+  ['country', 'Country', 'Address & contact', ['Seller Country Code'], '665'],
+  ['contact', 'Contact name', 'Address & contact', ['Seller Contact Name']],
+  ['phone', 'Contact phone', 'Address & contact', ['Seller Contact number']],
+  ['email', 'Contact email', 'Address & contact', ['Seller Contact Email']],
+  // sample tax invoice
+  ['invNo', 'Invoice number', 'Sample invoice – header', ['Invoice Number']],
+  ['invDate', 'Invoice issue date', 'Sample invoice – header', ['Invoice Issue Date'], 'date'],
+  ['dueDate', 'Payment due date', 'Sample invoice – header', ['Payment Due Date'], 'date'],
+  ['invType', 'Invoice type code', 'Sample invoice – header', ['Invoice Type Code'], '1'],
+  ['txType', 'Invoice transaction type code', 'Sample invoice – header', ['Invoice Transaction Type Code'], '30'],
+  ['currency', 'Invoice currency', 'Sample invoice – header', ['Invoice Currency Code'], '1158'],
+  ['periodStart', 'Invoicing period start', 'Sample invoice – header', ['Invoicing Period Start Date'], 'date'],
+  ['periodEnd', 'Invoicing period end', 'Sample invoice – header', ['Invoicing Period End Date'], 'date'],
+  ['po', 'Purchase order reference', 'Sample invoice – header', ['Purchase order reference']],
+  ['so', 'Sales order reference', 'Sample invoice – header', ['Sales Order Reference']],
+  ['contract', 'Contract reference', 'Sample invoice – header', ['Contract Reference']],
+  ['project', 'Project reference', 'Sample invoice – header', ['Project Reference']],
+  ['buyerName', 'Buyer name', 'Sample invoice – buyer', ['Buyer Name']],
+  ['buyerTrn', 'Buyer TRN', 'Sample invoice – buyer', ['Buyer Vat Identifier']],
+  ['buyerAddr1', 'Buyer address line 1', 'Sample invoice – buyer', ['Buyer Address Line 1']],
+  ['buyerCity', 'Buyer city', 'Sample invoice – buyer', ['Buyer City']],
+  ['buyerEmirate', 'Buyer emirate', 'Sample invoice – buyer', ['Buyer Country Subdivision'], '19'],
+  ['buyerCountry', 'Buyer country', 'Sample invoice – buyer', ['Buyer Country Code'], '665'],
+  ['buyerEndpoint', 'Buyer Peppol endpoint', 'Sample invoice – buyer', ['Buyer Electronic Address']],
+  ['buyerScheme', 'Buyer endpoint scheme', 'Sample invoice – buyer', ['Buyer Electronic Address Identifier'], '4420'],
+  ['lineNo', 'Line number', 'Sample invoice – line', ['Invoice Line Identifier']],
+  ['lineDesc', 'Item description', 'Sample invoice – line', ['Item Description']],
+  ['itemName', 'Item name', 'Sample invoice – line', ['Item Name']],
+  ['qty', 'Quantity', 'Sample invoice – line', ['Invoiced Quantity']],
+  ['uom', 'Unit of measure', 'Sample invoice – line', ['Invoiced Quantity Uom Code'], '1420'],
+  ['unitPrice', 'Unit price (excl. VAT)', 'Sample invoice – line', ['Item Net Price', 'Item Gross Price']],
+  ['lineNet', 'Line net amount', 'Sample invoice – line', ['Invoice Line Net Amount']],
+  ['vatCat', 'VAT category', 'Sample invoice – line', ['Vat Category Code', 'Invoiced Item Vat Category Code'], '277'],
+  ['vatRate', 'VAT rate %', 'Sample invoice – line', ['Vat Category Rate', 'Invoiced Item Vat Rate'], 'rate'],
+  ['sumLines', 'Sum of line net amounts', 'Sample invoice – totals', ['Sum Of Invoice Line Net Amount']],
+  ['totalEx', 'Total without VAT', 'Sample invoice – totals', ['Invoice Total Amount Without Vat']],
+  ['taxable', 'VAT taxable amount', 'Sample invoice – totals', ['Vat Category Taxable Amount']],
+  ['vatAmt', 'VAT amount', 'Sample invoice – totals', ['Invoice Total Tax Amount', 'Vat Category Tax Amount']],
+  ['totalInc', 'Total with VAT', 'Sample invoice – totals', ['Invoice Total Amount With Vat']],
+  ['due', 'Amount due for payment', 'Sample invoice – totals', ['Amount Due For Payment']],
+  ['payMeans', 'Payment means', 'Sample invoice – payment', ['Payment Means Type Code'], '73'],
+  ['terms', 'Payment terms', 'Sample invoice – payment', ['Payment terms']],
+  ['iban', 'IBAN / account', 'Sample invoice – payment', ['Payment Account Identifier']],
+  ['swift', 'SWIFT / BIC', 'Sample invoice – payment', ['Payment Service Provider Identifier']],
+  // sample credit note
+  ['cnNo', 'Credit note number', 'Sample credit note', ['Invoice Number']],
+  ['cnDate', 'Credit note issue date', 'Sample credit note', ['Invoice Issue Date'], 'date'],
+  ['cnType', 'Invoice type code', 'Sample credit note', ['Invoice Type Code'], '1'],
+  ['precNo', 'Original invoice number', 'Sample credit note', ['Preceding Invoice Reference']],
+  ['precDate', 'Original invoice date', 'Sample credit note', ['Preceding Invoice Issue Date'], 'date'],
+  ['cnReason', 'Reason', 'Sample credit note', ['Credit Note Reason Code'], '168'],
+  ['cnVat', 'VAT amount', 'Sample credit note', ['Invoice Total Tax Amount']],
+  ['cnTotal', 'Total with VAT', 'Sample credit note', ['Invoice Total Amount With Vat']]
+];
+const SRC = s => s.startsWith('Sample invoice') ? 'Sample invoice' : s.startsWith('Sample credit') ? 'Sample credit note' : 'Trade licence';
+// what the client's documents say about one PINT field (shown in the Mapping tab)
+function infoFor(f) {
+  const k = nrm(f.f), out = [];
+  for (const i of INFO) if (S.info[i[0]] && i[3].some(n => nrm(n) === k)) out.push({src:SRC(i[2]), v:S.info[i[0]]});
+  for (const o of S.other) if (o.f && o.v && nrm(o.f) === k) out.push({src:o.src || 'Other document', v:o.v});
+  return out;
+}
+const infoCell = f => infoFor(f).map(x => `<div><b>${esc(x.src)}:</b> ${esc(cut(x.v, 80))}</div>`).join('') + (hint(f) ? `<div>${hint(f)}</div>` : '');
+
+// ---- PDF storage: the files live in IndexedDB (not in the saved state), keyed by engagement and file id ----
+const idb = () => new Promise((res, rej) => { const r = indexedDB.open('eigap-files', 1); r.onupgradeneeded = () => r.result.createObjectStore('f'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error) });
+const idbDo = (mode, fn) => idb().then(db => new Promise((res, rej) => { const t = db.transaction('f', mode), r = fn(t.objectStore('f')); t.oncomplete = () => res(r.result); t.onerror = () => rej(t.error) }));
+const fkey = id => store.cur + ':' + id;
+const fput = (id, blob) => idbDo('readwrite', s => s.put(blob, fkey(id)));
+const fget = id => idbDo('readonly', s => s.get(fkey(id)));
+const fdel = id => idbDo('readwrite', s => s.delete(fkey(id)));
+let view = null;  // the PDF shown in the side panel: {id, name, url}
+const closeView = () => { if (view) URL.revokeObjectURL(view.url); view = null };
+async function upload(slot, files) {
+  for (const file of files) {
+    if (!/pdf/i.test(file.type) && !/\.pdf$/i.test(file.name)) { alert(file.name + ' is not a PDF.'); continue }
+    const id = uid();
+    try { await fput(id, file) } catch (err) { alert('This browser cannot store the PDF: ' + err.message); return }
+    S.files.push({id, slot, name:file.name, size:file.size});
+  }
+  save(); render();
+}
+async function viewFile(id) {
+  const meta = S.files.find(f => f.id === id), blob = await fget(id).catch(() => null);
+  closeView();
+  if (!blob) { alert('This file is not stored in this browser (it may have come from another computer).'); return render() }
+  view = {id, name:meta.name, url:URL.createObjectURL(blob)}; render();
+}
+async function removeFile(id) {
+  await fdel(id).catch(() => {});
+  S.files = S.files.filter(f => f.id !== id);
+  if (view?.id === id) closeView();
+  save(); render();
+}
+const SLOTS = {license:'Trade licence (PDF)', invoice:'Sample invoices (PDF)', credit:'Sample credit notes (PDF)', other:'Other documents (PDF)'};
+const docPanel = slots => `<div class="card side">${slots.map(sl => `<h2>${SLOTS[sl]}</h2><input type="file" accept="application/pdf,.pdf" multiple data-up="${sl}">`
+  + (S.files.filter(f => f.slot === sl).map(f => `<div style="margin:6px 0">${esc(f.name)} <span class="sm">(${Math.round(f.size / 1024)} KB)</span> <button data-view="${f.id}">View</button> <button data-rmf="${f.id}">Remove</button></div>`).join('') || '<p class="sm">None uploaded.</p>')).join('')}
+  ${view ? `<p class="sm">${esc(view.name)} · <a href="${view.url}" target="_blank">open in a new tab</a></p><iframe title="PDF viewer" src="${view.url}" style="width:100%;height:68vh;border:1px solid var(--bd)"></iframe>` : '<p class="sm">Choose View to read a document here while you fill in the details.</p>'}</div>`;
+
+// ---- the two tabs ----
+const infoField = i => {
+  const [k, l, , p, t] = i, v = S.info[k] || '', path = 'info.' + k;
+  const ctl = t && D.LK[t] ? `<select data-p="${path}"><option value="">—</option>${D.LK[t].o.map(([c, n]) => `<option value="${esc(c)}"${c === v ? ' selected' : ''}>${esc(c)} – ${esc(cut(n, 48))}</option>`).join('')}</select>`
+    : t === 'date' ? `<input type="date" data-p="${path}" value="${esc(v)}">` : t === 'area' ? ta(path, v) : inp(path, v);
+  return `<div><label>${esc(l)}${p.length ? ` <span class="sm">→ ${esc(p.join(', '))}</span>` : ''}</label>${ctl}</div>`;
+};
+const infoCard = secs => secs.map(s => `<div class="card"><h2>${esc(s)}</h2><div class="grid">${INFO.filter(i => i[2] === s).map(infoField).join('')}</div></div>`).join('');
+const vCompany = () => `<p class="sm">Fill these in from the trade licence and VAT certificate. Each value feeds the PINT seller fields shown after the arrow, and appears in the Mapping tab's Client information column.</p>
+  <div class="two"><div>${infoCard(['Trade licence', 'Tax & e-invoicing identifiers', 'Address & contact'])}</div>${docPanel(['license'])}</div>`;
+const vSamples = () => `<p class="sm">Fill in what the sample invoice, credit note and other documents show. Each value feeds the PINT fields shown after the arrow, and appears in the Mapping tab's Client information column.</p>
+  <div class="two"><div>${infoCard(['Sample invoice – header', 'Sample invoice – buyer', 'Sample invoice – line', 'Sample invoice – totals', 'Sample invoice – payment', 'Sample credit note'])}
+  <div class="card"><h2>Other documents</h2><p class="sm">Any other value from a document: pick the PINT field it belongs to.</p>
+    ${S.other.map((o, i) => `<div class="grid" style="margin-bottom:6px"><select data-p="other.${i}.f"><option value="">PINT field…</option>${D.F.map(f => `<option${o.f === f.f ? ' selected' : ''}>${esc(f.f)}</option>`).join('')}</select>${inp(`other.${i}.v`, o.v, 'Value')}${inp(`other.${i}.src`, o.src, 'Document (e.g. delivery note)')}<button data-delother="${i}">Remove</button></div>`).join('')}
+    <button id="bOtherAdd">Add a value</button></div></div>${docPanel(['invoice', 'credit', 'other'])}</div>`;
+
 // ---------- report: one slide spec (inches, 13.333 x 7.5), drawn twice: HTML for PDF print, PptxGenJS for PPTX ----------
 const CL = {navy:'1C1B4B', dark:'111133', red:'E8402F', card:'ECEAF6', zebra:'F3F3FA', line:'D6D6E7', green:'3C7D22', amber:'B8860B', mu:'6B6B80', blue:'8F8FC4', white:'FFFFFF'};
 const GAP_ST = ['Field not available', 'No data available'], DIRECT = /^Field is (direct|indirect) match/;
@@ -682,7 +824,8 @@ const UC = {'Free Zone / Designated Zone':'Flag transaction type code 10000000 f
 const yn = (key, i) => { const r = S[key][i - 1]?.r; return r === 'Yes' ? 'Applicable' : r === 'No' || r === 'Not Applicable' ? 'Not applicable' : 'To confirm' };
 function defaults() {
   const d = c => cut(c, 170) || '–';
-  const pr = [ans('q', 1), ans('q', 4), ans('q', 7)].filter(Boolean).map(s => s.replace(/[.\s]+$/, '')).join('. ');
+  const I = S.info, co = [I.legalName, I.activity, I.licNo && `trade licence ${I.licNo}${I.authority ? ' (' + I.authority + ')' : ''}`, I.trn && 'TRN ' + I.trn].filter(Boolean);
+  const pr = [...co, ans('q', 4), ans('q', 7)].filter(Boolean).map(s => s.replace(/[.\s]+$/, '')).join('. ');
   const uc = D.sc.map((s, i) => S.sc[i].r === 'Yes' ? `${s[1]} | ${UC[s[1]] || 'Review against the PINT AE data model'} | Action required` : '').filter(Boolean);
   return {
     profile: pr ? pr + '.' : '{client} issues invoices and credit notes from {system}. Add a short business profile here: activities, licences, TRN, turnover and monthly invoice volume.',
@@ -812,7 +955,7 @@ function slides() {
   add('Recommended Action Plan', 'Implementation roadmap from critical-gap closure to go-live', ac.flatMap((r, i) => { const y = 1.45 + i * ph; return [R(.5, y + .02, .5, .5, CL.navy, {ell:1}), T(.5, y + .12, .5, .3, String(i + 1), {size:14, bold:true, color:CL.white, align:'center', font:'Cambria'}),
     T(1.3, y + .12, 1.9, .3, r[0] || '', {size:12, bold:true}), T(3.3, y + .02, 6.7, .55, r[1] || '', {size:11}), R(10.2, y + .08, 2.63, .4, CL.card, {r:.2}), T(10.2, y + .15, 2.63, .3, r[2] || '', {size:10, bold:true, align:'center'}), {k:'hr', x:.5, y:y + ph - .1, w:12.33, color:CL.line}] }));
   // sample invoice
-  const fv = n => { const f = D.F.find(x => x.f === n); if (!f) return [n, '–']; const m = S.map[f.n]; return GAP_ST.includes(m.st) ? [n, {t:'Not available', c:CL.red, b:1}] : [n, cut(m.ex, 34) || '–'] };
+  const fv = n => { const f = FBY.get(nrm(n)); if (!f) return [n, '–']; const m = S.map[f.n]; return GAP_ST.includes(m.st) ? [n, {t:'Not available', c:CL.red, b:1}] : [n, cut(m.ex, 34) || '–'] };
   const kv = (x, y, w, title, names) => [T(x, y, w, .25, title.toUpperCase(), {size:9, bold:true, ls:1}), {k:'hr', x, y:y + .27, w, color:CL.navy},
     ...names.flatMap((n, i) => { const [l, v] = fv(n), yy = y + .33 + i * .24, vt = typeof v === 'object' ? v : {t:v}; return [T(x, yy, w * .5, .24, l.replace(/^(Seller|Buyer) /, ''), {size:8, color:CL.mu}), T(x + w * .5, yy, w * .5, .24, vt.t, {size:8, color:vt.c || CL.navy, bold:vt.b})] })];
   add('Sample Tax Invoice (Human Readable)', 'PINT AE field mapping – values from the first record of the sample data', [...kv(.5, 1.4, 3.0, 'Seller', ['Seller Name', 'Seller Vat Identifier', 'Seller Vat Scheme Code', 'Seller Legal Registration Identifier', 'Seller Legal Registration Type', 'Seller Address Line 1', 'Seller City', 'Seller Country Subdivision', 'Seller Country Code', 'Seller Electronic Address']),
@@ -909,12 +1052,16 @@ document.addEventListener('click', e => {
   const t = e.target, id = t.id;
   if (t.dataset.tab) goTab(+t.dataset.tab)
   else if (id === 'bClient') { document.body.classList.toggle('client'); if (document.body.classList.contains('client') && TABS[tab][1]) { tab = 0; render() } }
-  else if (id === 'bSave') download(new Blob([JSON.stringify(S)], {type:'application/json'}), base() + '.json');
+  else if (id === 'bSave') saveProject();
   else if (id === 'bPrev') document.getElementById('prev').innerHTML = slides().map(s => `<div class="pv">${slideHtml(s)}</div>`).join('');
   else if (id === 'bPptx') exportPptx().catch(err => alert('Could not build the PPTX: ' + err.message));
   else if (id === 'bPdf') printPdf();
   else if (t.dataset.reset) { delete S.rep[t.dataset.reset]; save(); render() }
   else if (id === 'bRen') { const n = prompt('Client name for this engagement:', S.meta.client || ''); if (n?.trim()) { S.meta.client = n.trim(); save(); render() } }
+  else if (t.dataset.view) viewFile(t.dataset.view);
+  else if (t.dataset.rmf) removeFile(t.dataset.rmf);
+  else if (id === 'bOtherAdd') { S.other.push({f:'', v:'', src:''}); save(); render() }
+  else if (t.dataset.delother) { S.other.splice(+t.dataset.delother, 1); save(); render() }
   else if (id === 'bNew') addEng();
   else if (id === 'bDel') delEng();
   else if (id === 'bAuto') { runAuto(); save(); render() }  // runAuto only touches columns not set by hand
@@ -940,6 +1087,7 @@ document.addEventListener('change', async e => {
     m.ex = (t.checked ? [...v, t.dataset.ms] : v.filter(x => x !== t.dataset.ms)).join(', ');
     m.e.ex = 1; d.querySelector('summary').textContent = m.ex || '— select —'; save();
   }
+  else if (t.dataset.up) { upload(t.dataset.up, [...t.files]); t.value = '' }
   else if (t.id === 'eng') openEng(t.value);
   else if (t.id === 'fQx' && t.files[0]) { try { await importQ(t.files[0]) } catch (err) { alert('Could not read the questionnaire: ' + err.message) } t.value = '' }
   else if (t.id === 'fM') { filt.m = t.value; keep(render) }
@@ -950,11 +1098,13 @@ document.addEventListener('change', async e => {
   else if (t.id === 'fSample' && t.files[0]) { try { await loadSample(t.files[0]) } catch (err) { alert('Could not read the sample file: ' + err.message) } }
   else if (t.id === 'sSheet') readSheet(t.value);
   else if (t.id === 'fOpen' && t.files[0]) {
-    try { const j = JSON.parse(await t.files[0].text()); if (!j.map || !j.q) throw Error('not a project file'); addEng(j) }
+    try { const j = JSON.parse(await t.files[0].text()); if (!j.map || !j.q) throw Error('not a project file'); const fl = j._files || {}; delete j._files; addEng(j);
+      for (const [id, url] of Object.entries(fl)) await fput(id, await (await fetch(url)).blob()) }
     catch (err) { alert('Could not open the project: ' + err.message) }
     t.value = '';
   }
   else if (t.dataset.p && t.type === 'checkbox') { setP(t.dataset.p, t.checked); save() }
+  else if (t.dataset.p && /^(info|other)\./.test(t.dataset.p) && t.tagName === 'SELECT') setP(t.dataset.p, t.value);  // no redraw: the PDF viewer would reload
   else if (t.dataset.p && t.tagName === 'SELECT') {
     setP(t.dataset.p, t.value);
     const tr = t.closest('tr[data-n]');  // a mapping row only needs itself redrawn, unless a new column changes rule results elsewhere
@@ -962,6 +1112,11 @@ document.addEventListener('change', async e => {
     else if (tr) tr.outerHTML = mapRow(D.F.find(f => f.n == tr.dataset.n)); else keep(render);
   }
 });
+async function saveProject() {   // the PDFs travel inside the project file as data URLs
+  const _files = {};
+  for (const f of S.files) { const b = await fget(f.id).catch(() => null); if (b) _files[f.id] = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b) }) }
+  download(new Blob([JSON.stringify({...S, _files})], {type:'application/json'}), base() + '.json');
+}
 function setP(p, v) {
   const a = p.split('.'), k = a.pop();
   let o = S; for (const x of a) o = o[x];
@@ -994,6 +1149,8 @@ function selfTest() {
   const lk = n => D.LK[F(n).lk].o;
   console.assert(lk('Invoice Currency Code').some(o => o[0] === 'AED') && lk('Seller Country Code').some(o => o[0] === 'AE'), 'lookup lists resolve');
   console.assert(D.F.every(f => !f.lk || D.LK[f.lk]) && D.F.every(f => f.md), 'every lookup and description exists');
+  INFO.forEach(i => i[3].forEach(n => console.assert(FBY.get(nrm(n)), 'unknown PINT field ' + n)));
+  INFO.forEach(i => i[4] && i[4] !== 'date' && i[4] !== 'area' && console.assert(D.LK[i[4]], 'unknown list ' + i[4]));
   console.log('selfTest done');
 }
 if (location.hash === '#test') selfTest();

@@ -239,7 +239,7 @@ function resetRow(n) {
   if (bs < .7) best = '';
   const o = best && ownerOf(best, n);
   if (o) return alert(`Auto reset not done: the best match "${colLabel(best)}" is already mapped to "${o.f}". Change or reset that field first.`);
-  m.e = {}; m.col = best; m.rem = f.md || '';
+  m.e = {}; m.col = best; m.imp = ''; m.rem = f.md || '';
   validateAll(); D.F.forEach(apply); save(); keep(render);
 }
 
@@ -414,6 +414,53 @@ function setHdr(src, n) {
   if (DATA[src]?.rows) fromRows(src, DATA[src].rows); else if (WBS[src]) readSheet(src, SHEET[src] || WBS[src].SheetNames[0]); else { save(); render() }
 }
 
+// ---------- import a gap-analysis workbook (the Detailed-Gap-Analysis sheet, as exported by this tool or worked in Excel) ----------
+let gapMsg = '';
+async function importGap(file) {
+  const wb = XLSX.read(await file.arrayBuffer(), {type:'array', cellDates:true}), v = x => String(x ?? '').trim();
+  const sn = wb.SheetNames.find(n => /^detailed[- ]gap[- ]analysis$/i.test(n.trim()));
+  if (!sn) { gapMsg = 'No "Detailed-Gap-Analysis" sheet found in this workbook.'; return render() }
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:''});
+  const h = rows.findIndex(r => r.some(c => /^data dictionary field$/i.test(v(c))));
+  if (h < 0) { gapMsg = 'The sheet has no "Data Dictionary Field" column.'; return render() }
+  const hd = rows[h].map(c => v(c).toLowerCase().replace(/\s+/g, ' ')), ci = re => hd.findIndex(x => re.test(x));
+  const C = {f:ci(/^data dictionary field$/), col:ci(/^sample data field name/), st:ci(/^map status/), gap:ci(/^gap identified/), rec:ci(/^detailed recommendation/), ex:ci(/^example$/), rem:ci(/^remarks/), code:ci(/^recommendation code/)};
+  const keyFor = name => {   // sample column name in the sheet -> the key used by the Mapping tab; null = not loaded in this session
+    if (!name || /^(n\/a|not available)$/i.test(name)) return '';
+    if (/^available in pdf$/i.test(name)) return PDF;
+    const cm = /^customer master:\s*(.*)$/i.exec(name), want = (cm ? 'cm:' + cm[1] : name).trim().toLowerCase();
+    return S.cols.find(c => c.name.toLowerCase() === want)?.name ?? null;
+  };
+  let n = 0, skipped = 0, badStatus = 0; const conflicts = [], unloaded = [];
+  for (const r of rows.slice(h + 1)) {
+    const f = FBY.get(nrm(v(r[C.f]))); if (!f) { if (v(r[C.f])) skipped++; continue }
+    const m = S.map[f.n]; n++;
+    const st = ST.find(s => s.toLowerCase() === v(r[C.st]).toLowerCase());
+    if (st) { m.st = st; m.e.st = 1 } else if (v(r[C.st])) badStatus++;
+    const cell = C.col >= 0 ? v(r[C.col]) : '', key = cell ? keyFor(cell) : undefined;
+    if (key === null) { m.imp = cell; unloaded.push(f.f) }
+    else if (key !== undefined) {
+      const o = key && key !== PDF && ownerOf(key, f.n);
+      if (o) { m.imp = cell; conflicts.push(`${f.f} (${cell} is used by ${o.f})`) } else { m.col = key; m.e.col = 1; m.imp = '' }
+    }
+    for (const k of ['gap', 'rec', 'ex', 'rem']) if (C[k] >= 0 && v(r[C[k]])) { m[k] = v(r[C[k]]); m.e[k] = 1 }
+    const code = parseInt(v(r[C.code]), 10); if (code >= 1 && code <= 9) { m.code = code; m.e.code = 1 }
+  }
+  const sm = wb.SheetNames.find(x => /^summary$/i.test(x.trim()));
+  if (sm) for (const r of XLSX.utils.sheet_to_json(wb.Sheets[sm], {header:1, defval:''})) {
+    const k = v(r.find(c => v(c)));  const val = v(r[r.findIndex(c => v(c)) + 1]);
+    if (/system analy[sz]ed/i.test(k) && val && !S.meta.system) S.meta.system = val;
+    if (/data dictionary/i.test(k) && /^(yes|no)$/i.test(val)) S.meta.dict = val[0].toUpperCase() + val.slice(1).toLowerCase();
+  }
+  if (DATA.inv || DATA.cm) validateAll();
+  D.F.forEach(apply); save();
+  gapMsg = `Imported ${n} fields from "${sn}"` + (skipped ? `; ${skipped} rows are not PINT fields known to the tool` : '') + (badStatus ? `; ${badStatus} statuses were not in the status list and were skipped` : '')
+    + (unloaded.length ? `; ${unloaded.length} sample columns are not loaded, so the imported name is shown under the Sample column (load the sample in this tab, then pick them)` : '')
+    + (conflicts.length ? `; ${conflicts.length} columns were not set because another field already uses them: ${conflicts.slice(0, 5).join('; ')}${conflicts.length > 5 ? '…' : ''}` : '') + '.';
+  if (wb.SheetNames.some(x => /^client checklist$/i.test(x.trim()))) { await importQ(file); gapMsg += ' ' + qMsg; render(); return }
+  render();
+}
+
 async function importQ(file) {
   const wb = XLSX.read(await file.arrayBuffer(), {type:'array'}), out = [];
   let skipped = 0;
@@ -525,7 +572,7 @@ function mapRow(f) {
   return `<tr data-n="${f.n}"${m.ok ? ' class="done"' : ''}><td>${f.n}<br><input type="checkbox" data-p="${p}ok" title="Mark as reviewed"${m.ok?' checked':''} style="width:auto"></td><td>${esc(f.g)}</td>
   <td title="${esc(f.d)}"><b>${esc(f.f)}</b><div class="sm">${esc(f.m)}${f.occ?' · '+esc(f.occ):''}${f.dt?' · '+esc(f.dt):''}${f.lv?' · lookup':''}</div>${f.rule?`<div class="sm">${esc(f.rule.slice(0,160))}</div>`:''}</td>
   <td class="sm">${infoCell(f)}</td>
-  <td><select data-p="${p}col">${colOpts(m.col)}</select>${c?`<div class="sm">${pctOf(c)}% populated${m.e.col?'':' · auto match '+Math.min(100,Math.round(100*score(f,plain(m.col))))+'%'}</div>`:''}</td>
+  <td><select data-p="${p}col">${colOpts(m.col)}</select>${m.imp ? `<div class="sm">Imported: ${esc(m.imp)}</div>` : ''}${c?`<div class="sm">${pctOf(c)}% populated${m.e.col?'':' · auto match '+Math.min(100,Math.round(100*score(f,plain(m.col))))+'%'}</div>`:''}</td>
   <td><select data-p="${p}st">${opt(ST, m.st, '— not reviewed —')}</select></td>
   <td>${ta(p+'gap', m.gap)}</td><td>${ta(p+'rec', m.rec)}</td>
   <td><select data-p="${p}code">${opt(Object.keys(RC), m.code, '—')}</select><div class="sm">${esc(RC[m.code]||'')}</div></td>
@@ -547,7 +594,9 @@ function importCard(src, title, note) {
     ${cm ? '' : `<div><label>Data dictionary available?</label><select data-p="meta.dict">${opt(['Yes', 'No'], S.meta.dict)}</select></div>`}</div>
     <p class="sm">${n ? `${n} columns read.` : 'Nothing loaded yet.'}</p>${preview(src)}</div>`;
 }
-const vImport = () => importCard('inv', 'Invoice sample', 'Sales register, ledger or any invoice data extract.')
+const gapCard = () => `<div class="card"><h2>Gap analysis workbook (Excel)</h2><p class="sm">Bring in analysis already worked in Excel: the <b>Detailed-Gap-Analysis</b> sheet (sample column, map status, gap, recommendation, example, remarks, code) and, if present, the Summary details and the client checklist sheets. Filled cells replace what the tool has; blank cells keep it. Values you import are treated as set by hand.</p>
+  <input id="fGap" type="file" accept=".xlsx,.xls"><p>${esc(gapMsg)}</p></div>`;
+const vImport = () => gapCard() + importCard('inv', 'Invoice sample', 'Sales register, ledger or any invoice data extract.')
   + importCard('cm', 'Customer master', 'Optional. Its columns can be picked in the Mapping tab for the buyer fields (name, TRN, address…).');
 function vMap() {
   const n = s => S.cols.filter(c => srcOf(c) === s).length;
@@ -1191,6 +1240,7 @@ document.addEventListener('change', async e => {
   else if (t.id === 'fK') { filt.k = t.value; keep(render) }
   else if ((t.id === 'fSample' || t.id === 'fCm') && t.files[0]) { try { await loadSample(t.id === 'fCm' ? 'cm' : 'inv', t.files[0]) } catch (err) { alert('Could not read the file: ' + err.message) } }
   else if (t.id === 'sSheet' || t.id === 'sSheetCm') readSheet(t.id === 'sSheet' ? 'inv' : 'cm', t.value);
+  else if (t.id === 'fGap' && t.files[0]) { try { await importGap(t.files[0]) } catch (err) { alert('Could not read the workbook: ' + err.message) } t.value = '' }
   else if (t.dataset.hdr) setHdr(t.dataset.hdr, Math.max(1, +t.value || 1));
   else if (t.id === 'fOpen' && t.files[0]) {
     try { const j = JSON.parse(await t.files[0].text()); if (!j.map || !j.q) throw Error('not a project file'); const fl = j._files || {}; delete j._files; addEng(j);
@@ -1224,7 +1274,7 @@ function setP(p, v) {
   if (a[0] === 'map') {
     const f = D.F.find(x => x.n == a[1]), m = S.map[f.n];
     if (k === 'ok') return save();
-    if (k === 'col') { m.e.col = 1; m.e.st = 0; m.e.ex = 0; m.e.gap = 0; m.e.rec = 0; m.e.code = 0 } else m.e[k] = 1;
+    if (k === 'col') { m.imp = ''; m.e.col = 1; m.e.st = 0; m.e.ex = 0; m.e.gap = 0; m.e.rec = 0; m.e.code = 0 } else m.e[k] = 1;
     if (k === 'st') { m.e.gap = m.e.rec = m.e.code = 0 }
     apply(f);
   }

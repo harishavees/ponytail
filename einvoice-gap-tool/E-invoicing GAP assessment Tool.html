@@ -36,7 +36,7 @@ tr.warn td:first-child{box-shadow:inset 3px 0 var(--wa)}
 .cons-only{}body.client .cons-only{display:none!important}
 .n{text-align:right}.tag{display:inline-block;padding:0 6px;border-radius:9px;background:var(--bd);font-size:11px}
 .hid{display:none}
-.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}.side{position:sticky;top:120px}@media (max-width:1000px){.two{grid-template-columns:1fr}.side{position:static}}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:stretch}.side{position:sticky;top:112px}@media (max-width:1000px){.two{grid-template-columns:1fr}.side{position:static}}
 #printRoot{display:none}
 .slide{position:relative;width:13.333in;height:7.5in;overflow:hidden;box-sizing:border-box}
 .slide .b{position:absolute;margin:0}
@@ -761,6 +761,7 @@ async function viewFile(id) {
   closeView();
   if (!blob) { alert('This file is not stored in this browser (it may have come from another computer).'); return render() }
   view = {id, name:meta.name, url:URL.createObjectURL(blob)}; render();
+  const f = document.querySelector('iframe'); if (f) scrollBy(0, f.getBoundingClientRect().top - 150);  // bring the viewer into view
 }
 async function removeFile(id) {
   await fdel(id).catch(() => {});
@@ -769,9 +770,9 @@ async function removeFile(id) {
   save(); render();
 }
 const SLOTS = {license:'Trade licence (PDF)', invoice:'Sample invoices (PDF)', credit:'Sample credit notes (PDF)', other:'Other documents (PDF)'};
-const docPanel = slots => `<div class="card side">${slots.map(sl => `<h2>${SLOTS[sl]}</h2><input type="file" accept="application/pdf,.pdf" multiple data-up="${sl}">`
-  + (S.files.filter(f => f.slot === sl).map(f => `<div style="margin:6px 0">${esc(f.name)} <span class="sm">(${Math.round(f.size / 1024)} KB)</span> <button data-view="${f.id}">View</button> <button data-rmf="${f.id}">Remove</button></div>`).join('') || '<p class="sm">None uploaded.</p>')).join('')}
-  ${view ? `<p class="sm">${esc(view.name)} · <a href="${view.url}" target="_blank">open in a new tab</a></p><iframe title="PDF viewer" src="${view.url}" style="width:100%;height:68vh;border:1px solid var(--bd)"></iframe>` : '<p class="sm">Choose View to read a document here while you fill in the details.</p>'}</div>`;
+const docPanel = slots => `<div>${slots.map(sl => `<div class="card"><h2>${SLOTS[sl]}</h2><input type="file" accept="application/pdf,.pdf" multiple data-up="${sl}">`
+  + (S.files.filter(f => f.slot === sl).map(f => `<div style="margin:6px 0">${esc(f.name)} <span class="sm">(${Math.round(f.size / 1024)} KB)</span> <button data-view="${f.id}">View</button> <button data-rmf="${f.id}">Remove</button></div>`).join('') || '<p class="sm">None uploaded.</p>') + '</div>').join('')}
+  <div class="card side">${view ? `<p class="sm" style="margin:0 0 6px">${esc(view.name)} · <a href="${view.url}" target="_blank">open in a new tab</a></p><iframe title="PDF viewer" src="${view.url}" style="width:100%;height:calc(100vh - 230px);min-height:300px;border:1px solid var(--bd)"></iframe>` : '<p class="sm" style="margin:0">Choose View to read a document here; it stays in view while you scroll the form.</p>'}</div></div>`;
 
 // ---- the two tabs ----
 const infoField = i => {

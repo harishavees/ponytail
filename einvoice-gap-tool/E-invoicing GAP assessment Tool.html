@@ -630,6 +630,7 @@ function vMap() {
     <div class="bulk"><b id="selN">${selNote()}</b> <button id="bSelAll" title="Ticks every row matching the filters above">Select filtered rows</button> <button id="bSelNone">Clear</button> <button id="bBulk" class="pri">Apply to selected</button>
       <select id="bulkCol" title="Sample column for the selected rows"><option value="@keep">Sample column: unchanged</option><option value="">Not Available</option><option value="${PDF}">Available in PDF</option></select>
       <select id="bulkSt" title="Map status for the selected rows">${opt(ST, '@keep', 'Map status: unchanged').replace('<option value="">','<option value="@keep">')}</select>
+      <select id="bulkOk" title="Done tick for the selected rows"><option value="">Done: unchanged</option><option value="1">Mark as Done</option><option value="0">Mark as not Done</option></select>
       <span class="sm">Bulk sample column: Not Available / Available in PDF only (one column serves one field).</span></div>
     <div class="wrap" style="position:sticky;top:50px;max-height:calc(100vh - 92px)"><table><thead><tr><th>#/Done</th><th>Group</th><th>PINT field</th><th>Client information</th><th>Sample column</th><th>Map status</th><th>Gap identified</th><th>Recommendation</th><th>Code</th><th>Example</th><th>Remarks</th><th>Auto reset</th></tr></thead>
     <tbody id="mapBody">${rows().map(mapRow).join('')}</tbody></table></div></div>`;
@@ -1227,9 +1228,9 @@ document.addEventListener('click', e => {
   else if (id === 'bSelAll') { rows().forEach(f => SEL.add(f.n)); keep(render) }
   else if (id === 'bSelNone') { SEL.clear(); keep(render) }
   else if (id === 'bBulk') {
-    const c = document.getElementById('bulkCol').value, s = document.getElementById('bulkSt').value;
+    const c = document.getElementById('bulkCol').value, s = document.getElementById('bulkSt').value, ok = document.getElementById('bulkOk').value;
     if (!SEL.size) return alert('Tick the fields to change first.');
-    SEL.forEach(n => { if (c !== '@keep') setP(`map.${n}.col`, c); if (s !== '@keep') setP(`map.${n}.st`, s) });
+    SEL.forEach(n => { if (c !== '@keep') setP(`map.${n}.col`, c); if (s !== '@keep') setP(`map.${n}.st`, s); if (ok) S.map[n].ok = ok === '1' });
     if (DATA.inv || DATA.cm) { validateAll(); D.F.forEach(apply) }
     save(); keep(render);
   }

@@ -259,17 +259,80 @@ function codeFor(f, st) {
   if (/not available|No data/.test(st)) return f.m==='Optional' ? 8 : f.m==='Mandatory' ? (f.lk||f.lv?5:3) : (f.lk||f.lv?6:7);  // lookup = metadata list (or the gap workbook's list reference)
   return 1;
 }
+// field-specific wording for the automatic recommendation: a = field not available (add it), m = field available (map it)
+const LIBTXT = {
+ 'Vat Category Code':['Add document-level VAT category code field (e.g., S – Standard rate); one VAT breakdown row per category.'],
+ 'Vat Category Taxable Amount':['Add taxable amount per VAT category (line net amounts + charges – allowances).'],
+ 'Vat Category Tax Amount':['Add VAT amount per category; must reconcile to Invoice Total Tax Amount.'],
+ 'Vat Category Rate':['Add VAT rate per category.', 'Map as percentage value (e.g., 5).'],
+ 'Amount Due For Payment':['Add amount due field (total with VAT less amounts prepaid); max. 2 decimals.'],
+ 'Invoice Type Code':['Add field and map to PINT AE codes: 380 – Tax Invoice, 381 – Credit Note.'],
+ 'Invoice Transaction Type Code':['Add 8-digit flag: 00000000 standard, 00001000 continuous supply, 00010000 summary (00011000 where both apply).'],
+ 'Invoice Currency Code':['Add currency code field per ISO 4217 (e.g., AED).'],
+ 'Payment Due Date':['Add due date field (YYYY-MM-DD) – capture in the system or derive from customer payment terms.'],
+ 'Payment Means Type Code':['Add payment means code per UNCL 4461 (e.g., 30 – Credit transfer, 20 – Cheque, 10 – Cash).'],
+ 'Seller Electronic Address':['Add seller TIN (first 10 digits of the TRN) as the Peppol endpoint.'],
+ 'Seller Electronic Identifier':['Add endpoint scheme identifier 0235 (UAE TIN) in the seller master.'],
+ 'Seller Legal Registration Identifier':['Add trade licence number of the issuing licence.'],
+ 'Seller Legal Registration Identifier Type':['Add registration type "TL" (Trade Licence) from the PINT AE lookup.'],
+ 'Seller Vat Scheme Code':['Add tax scheme code "VAT" in the seller master.'],
+ 'Buyer Electronic Address':['Add buyer Peppol endpoint = buyer TIN (first 10 digits of the TRN); derivable from the customer TRN.'],
+ 'Buyer Electronic Identifier':['Add endpoint scheme identifier 0235 (UAE TIN) in the customer master.'],
+ 'Buyer Vat Scheme Code':['Add tax scheme code "VAT" for VAT-registered buyers.'],
+ 'Buyer Country Code':['Add ISO 3166-1 country code (e.g., AE) in the customer master.'],
+ 'Unit Of Measure Code':['Add coded unit of measure per UN/ECE Rec 20 (e.g., C62 – unit, DAY, MON, MTK) in place of free text.'],
+ 'Invoice Line Net Amount':['Add line net amount (quantity × net price – line allowances + charges), before VAT.'],
+ 'Item Name':['Add item / service name field, separate from the description.'],
+ 'Item Gross Price':['Add unit price before item price discount.'],
+ 'Item Net Price':['Add unit price after item price discount.'],
+ 'Item Price Base Quantity':['Add base quantity to which the price applies (default 1).'],
+ 'Invoiced Item Vat Category Code':['Add line-level VAT category code for every invoice line.'],
+ 'Invoiced Item Vat Rate':['Add line-level VAT rate.'],
+ 'Vat Line Amount In Aed':['Add line-level VAT amount in AED.'],
+ 'Invoicing Period Start Date':['Add period start date (YYYY-MM-DD) for monthly / continuous billing.'],
+ 'Invoicing Period End Date':['Add period end date (YYYY-MM-DD) for monthly and summary invoices.'],
+ 'Preceding Invoice Issue Date':['Add original invoice date for credit notes (381).'],
+ 'Seller Authority Name':['Add issuing authority per licence (e.g., Dubai Economy and Tourism – DXB; Abu Dhabi DED – AUH).'],
+ 'Payment Card Holder Name':['Required only when payment means is 48 / 54 / 55 (card).'],
+ 'Payment Card Primary Account Number':['Masked PAN when payment means is 48 / 54 / 55 (e.g., 4111-****-****-2222).'],
+ 'Invoice Number':['Add a unique invoice number.', 'Map as unique invoice ID; the year / month / serial series stays unique.'],
+ 'Invoice Date':['Add the invoice issue date (YYYY-MM-DD).', 'Map and convert to YYYY-MM-DD.'],
+ 'Preceding Invoice Reference':['Add the original invoice number for credit notes (381).', 'Map original invoice number for credit notes (381).'],
+ 'Seller Name':['Add the seller legal name as per trade licence.', 'Map legal name as per trade licence.'],
+ 'Seller Vat Identifier':['Add the seller 15-digit TRN.', 'Map 15-digit TRN.'],
+ 'Seller Address Line 1':['Add the address of the issuing licence.', 'Map address of the issuing licence.'],
+ 'Seller City':['Add the seller city.', 'Map to the seller master city.'],
+ 'Seller Country Subdivision':['Add emirate code (e.g., DXB / AUH) by issuing licence.', 'Map emirate code (e.g., DXB / AUH) by issuing licence.'],
+ 'Seller Country Code':['Add ISO country code (AE).', 'Convert "UAE" to ISO code AE.'],
+ 'Buyer Name':['Add the buyer legal name per customer master.', 'Map legal name per customer master.'],
+ 'Buyer Vat Identifier':['Add the buyer 15-digit TRN.', 'Map 15-digit customer TRN.'],
+ 'Buyer Address Line 1':['Add the buyer address.', 'Map; validate completeness in the customer master.'],
+ 'Buyer City':['Add the buyer city.', 'Map city; review use of the address fields.'],
+ 'Buyer Country Subdivision':['Add the buyer emirate code.', 'Convert city to emirate code (DXB, AUH, SHJ …).'],
+ 'Payment Account Identifier':['Add the IBAN; mandatory when payment means = 30.', 'Map IBAN; mandatory when payment means = 30.'],
+ 'Payment Service Provider Identifier':['Add the SWIFT / BIC; mandatory when payment means = 30.', 'Map SWIFT / BIC; mandatory when payment means = 30.'],
+ 'Invoice Total Tax Amount':['Add total tax amount; must equal the sum of VAT category tax amounts.', 'Map; must equal the sum of VAT category tax amounts.'],
+ 'Sum Of Invoice Line Net Amount':['Add the sum of line net amounts.', 'Map; must equal the sum of line net amounts.'],
+ 'Invoice Total Amount Without Vat':['Add total without VAT (after document-level allowances / charges); max. 2 decimals.', 'Map after document-level allowances / charges; max. 2 decimals.'],
+ 'Invoice Total Amount With Vat':['Add total with VAT; max. 2 decimals.', 'Map; max. 2 decimals.'],
+ 'Invoice Line Identifier':['Add sequential line numbers.', 'Map sequential line numbers.'],
+ 'Invoiced Quantity':['Add the invoiced quantity.', 'Map to the quantity column.'],
+ 'Item Description':['Add the item description.', 'Map to the item description.'],
+ 'Business Process Type':['ASP to default this value.', 'ASP to default this value.'],
+ 'Specification Identifier':['ASP to default this value.', 'ASP to default this value.']};
+const LIB = new Map(Object.entries(LIBTXT).map(([k, v]) => [k.toLowerCase(), v]));
 function texts(f, st, c) {
   if (!st) return ['',''];
   if (st === 'Not Applicable') return ['Not applicable to this client.', ''];
-  if (c && /direct|indirect/.test(st)) return [`Mapped to ${colLabel(c.name)} (${pctOf(c)}% populated in sample).`, ''];
-  if (st === 'Field exists but incompatible') return [`Sample column "${colLabel(c?.name||'')}" holds this data under a different name or format.`, 'Field should be mapped.'];
+  if (c && /direct|indirect/.test(st)) return [`Mapped to ${colLabel(c.name)} (${pctOf(c)}% populated in sample).`, LIB.get(f.f.replace(/\s+/g, ' ').trim().toLowerCase())?.[1] || ''];
+  const lib = LIB.get(f.f.replace(/\s+/g, ' ').trim().toLowerCase());
+  if (st === 'Field exists but incompatible') return [`Sample column "${colLabel(c?.name||'')}" holds this data under a different name or format.`, lib?.[1] || 'Field should be mapped.'];
   if (st === 'Need clarification/confirmation') return [`Sample column "${colLabel(c?.name||'')}" is populated in only ${c?pctOf(c):0}% of records.`, 'Client to confirm the source and complete the missing values.'];
   if (/ASP can derive|Incompatible data/.test(st)) return ['Field not available in the sample.', 'ASP can derive or calculate this value.'];
   if (/default/.test(st)) return ['Field not available in the sample.', 'ASP can default this value.'];
   if (st === 'Can be configured in ASP') return ['If not provided in the data file, ASP may default the value.', ''];
   if (/not required/.test(st)) return ['Field available but not required by FTA.', ''];
-  return ['Field not available for this transaction.', `It is recommended to capture ${f.f}.`];
+  return ['Field not available for this transaction.', lib?.[0] || (f.m === 'Optional' && f.md ? f.md : `It is recommended to capture ${f.f}.`)];
 }
 const flat = s => String(s).trim().replace(/\s+/g, ' ').toLowerCase();  // 'Invoice Number' = 'invoice number', but not 'Invoice_Number'
 const PDF = '@pdf';  // sample column value for fields the sales register lacks but the PDF invoice shows (typically seller details)
@@ -947,7 +1010,7 @@ const infoField = i => {
   return `<div><label>${esc(l)}${p.length ? ` <span class="sm">→ ${esc(p.join(', '))}</span>` : ''}</label>${ctl}</div>`;
 };
 const infoCard = secs => secs.map(s => `<div class="card"><h2>${esc(s)}</h2><div class="grid">${INFO.filter(i => i[2] === s).map(infoField).join('')}</div></div>`).join('');
-const vCompany = () => `<div class="card"><h2>Invoicing system</h2><div class="grid"><div><label>System analysed</label>${inp('meta.system', S.meta.system, 'e.g. ERP name, or "Excel / manual"')}</div></div></div>\n  <p class="sm">Fill these in from the trade licence and VAT certificate. Each value feeds the PINT seller fields shown after the arrow, and appears in the Mapping tab's Client information column.</p>
+const vCompany = () => `<div class="card"><h2>Invoicing system</h2><div class="grid"><div><label>System analysed</label>${inp('meta.system', S.meta.system, 'e.g. ERP name, or "Excel / manual"')}</div><div><label>Short name for the report text</label>${inp('meta.short', S.meta.short || '', 'e.g. EnFM (blank = full name)')}</div></div></div>\n  <p class="sm">Fill these in from the trade licence and VAT certificate. Each value feeds the PINT seller fields shown after the arrow, and appears in the Mapping tab's Client information column.</p>
   <div class="two"><div>${infoCard(['Trade licence', 'Tax & e-invoicing identifiers', 'Address & contact'])}</div>${docPanel(['license'])}</div>`;
 const vSamples = () => `<p class="sm">Fill in what the sample invoice, credit note and other documents show. Each value feeds the PINT fields shown after the arrow, and appears in the Mapping tab's Client information column.</p>
   <div class="two"><div>${infoCard(['Sample invoice – header', 'Sample invoice – buyer', 'Sample invoice – line', 'Sample invoice – totals', 'Sample invoice – payment', 'Sample credit note'])}
@@ -977,10 +1040,27 @@ function stat() {
     nM:M.length, ready:M.filter(r => +r.m.code === 1).length,   // mandatory fields that need no new ERP field (code 1)
      asp:non.filter(r => [2, 4, 9].includes(+r.m.code)).length};
 }
+// Ministerial Decision 244/2025 phases, picked from the turnover typed in the checklist (question 4); null when it cannot be read
+function phase() {
+  const m = /(\d[\d,]*\.?\d*)\s*(billion|bn|million|mn|m|thousand|k)?/i.exec(ans('q', 4).replace(/\s+/g, ' '));
+  if (!m) return null;
+  const mul = {billion:1e9, bn:1e9, million:1e6, mn:1e6, m:1e6, thousand:1e3, k:1e3}[(m[2] || '').toLowerCase()], n = parseFloat(m[1].replace(/,/g, ''));
+  const v = mul ? n * mul : n >= 1e5 ? n : null;
+  if (v == null) return null;
+  const t = v >= 1e6 ? (v / 1e6).toLocaleString('en', {maximumFractionDigits:1}) + 'm' : v.toLocaleString('en');
+  return v >= 5e7 ? {n:'Phase 1', rev:'≥ AED 50m', asp:'30 October 2026', live:'1 January 2027', t} : {n:'Phase 2', rev:'< AED 50m', asp:'31 March 2027', live:'1 July 2027', t};
+}
 function tk(s, st) {
-  const v = {client:S.meta.client || 'the client', system:S.meta.system || 'the billing system', critical:st.crit.length, critM:st.critM, critCM:st.critCM, noncrit:st.non.length, applicable:st.app.length,
+  const nm = S.meta.short || S.meta.client || 'the client', ph = phase();
+  const areas = Object.entries(st.crit.reduce((a, r) => (a[r.f.g] = (a[r.f.g] || 0) + 1, a), {})).sort((a, b) => b[1] - a[1]).slice(0, 4).map(x => x[0].toLowerCase());
+  const v = {client:nm,
+    phaseLine:ph ? `${nm} falls in ${ph.n}: the ASP must be appointed by ${ph.asp} and e-invoicing is mandatory from ${ph.live}.` : '',
+    aspDeadline:ph ? `${ph.n} deadline ${ph.asp}` : 'the applicable phase deadline', liveDay:ph ? ph.live : "the date set by the client's phase",
+    goLive:ph ? 'go-live on ' + ph.live : 'go-live', finalLead:ph ? `As a ${ph.n} business, ${nm} must issue e-invoices from ${ph.live}, so confirming` : 'Confirming',
+    aspPart:st.asp ? ` and configure ASP defaults for ${st.asp} fields` : '', aspSent:st.asp ? ` and ${st.asp} can be defaulted or derived by the ASP` : '',
+    critareas:areas.length ? areas.slice(0, -1).join(', ') + (areas.length > 1 ? ' and ' : '') + areas.slice(-1) : 'no area yet', system:S.meta.system || 'the billing system', critical:st.crit.length, critM:st.critM, critCM:st.critCM, noncrit:st.non.length, applicable:st.app.length,
     mapping:st.non.length - st.asp, asp:st.asp, ready:st.ready, nM:st.nM, readyPct:st.nM ? Math.round(100 * st.ready / st.nM) : 0};
-  return String(s).replace(/\{(\w+)\}/g, (m, k) => k in v ? v[k] : m);
+  return String(s).replace(/\{(\w+)\}/g, (m, k) => k in v ? v[k] : m).split('\n').map(x => x.replace(/ {2,}/g, ' ').trim()).join('\n');
 }
 
 // ---- editable narrative sections: S.rep[key] overrides the default; {tokens} are filled at render time ----
@@ -989,22 +1069,32 @@ const UC = {'Free Zone / Designated Zone':'Flag transaction type code 10000000 f
   'Continuous / Periodic Supply':'Flag transaction type code 00001000 and capture invoicing period start and end dates', 'Agent Billing':'Flag transaction type code 00000100 and capture the principal ID',
   'E-Commerce':'Flag transaction type code 00000010 for supplies through e-commerce', 'Exports':'Flag transaction type code 00000001 for exports', 'Self-Billing':'Use invoice type code 389 (self-billed invoice) / 261 (self-billed credit note)',
   'Domestic Reverse Charge':'Use VAT category code AE and the reverse-charge treatment', 'Intercompany':'Related-party invoices follow the standard e-invoicing flow; no relief without a VAT group'};
+const UCNO = {'Free Zone / Designated Zone':'No designated zone supplies (flag transaction type code 10000000 if they arise)', 'Deemed Supplies':'No deemed supplies', 'Profit Margin Scheme':'No qualifying transactions',
+  'Summary / Consolidated Invoice':'No summary / consolidated invoices', 'Continuous / Periodic Supply':'No recurring or continuous supplies', 'Agent Billing':'No invoices on behalf of a principal', 'E-Commerce':'No online / marketplace sales',
+  'Exports':'No customers outside the UAE', 'Self-Billing':'No self-billing arrangements', 'Domestic Reverse Charge':'No notified RCM supplies', 'Intercompany':'No intercompany invoicing'};
 const yn = (key, i) => { const r = S[key][i - 1]?.h ? '' : S[key][i - 1]?.r; return r === 'Yes' ? 'Applicable' : r === 'No' || r === 'Not Applicable' ? 'Not applicable' : 'To confirm' };
 function defaults() {
   const d = c => cut(c, 170) || '–';
   const I = S.info, co = [I.legalName, I.activity, I.licNo && `trade licence ${I.licNo}${I.authority ? ' (' + I.authority + ')' : ''}`, I.trn && 'TRN ' + I.trn].filter(Boolean);
   const pr = [...co, ans('q', 4), ans('q', 7)].filter(Boolean).map(s => s.replace(/[.\s]+$/, '')).join('. ');
   const uc = D.sc.map((s, i) => S.sc[i].r === 'Yes' && !S.sc[i].h ? `${s[1]} | ${UC[s[1]] || 'Review against the PINT AE data model'} | Action required` : '').filter(Boolean);
+  const A = i => S.q[i - 1] && !S.q[i - 1].h ? S.q[i - 1] : {}, extra = [];
+  if (A(13).r === 'Yes') extra.push('Advances / deposits | Advance receipts must be tax-invoiced within 14 days of receipt; move proforma-based advance billing to a tax invoice | Action required');
+  if (A(18).r === 'Yes' && /gov|b2g/i.test(A(18).c || '')) extra.push("Government customers (B2G) | Supplies to government entities are in scope from {client}'s go-live, even though government buyers go live later (Phase 3) | Action required");
+  if (A(11).r === 'Yes') extra.push('Customer-specific formats | Customer-specific templates must draw on the same PINT AE dataset | Mapping');
+  if (A(12).r === 'No') extra.push('Single VAT treatment | All supplies share one VAT treatment; one VAT breakdown row per invoice, extensible if other categories arise | Mapping');
   return {
+    matrix: 'All {critM} Mandatory critical gaps block compliant issuance of every invoice and must be closed before {goLive}.\n{critCM} Conditional Mandatory critical gaps apply to the scenarios this client uses.',
     profile: pr ? pr + '.' : '{client} issues invoices and credit notes from {system}. Add a short business profile here: activities, licences, TRN, turnover and monthly invoice volume.',
-    exec: 'Of the {applicable} applicable fields, {critical} are critical gaps that need new fields in {system}, and {noncrit} are non-critical: {mapping} existing fields need PINT AE mapping and {asp} can be defaulted or derived by the ASP. Add the client\'s phase and deadline, and where the critical gaps sit, here.',
-    priority: 'Confirm the ASP appointment and agree the integration method before the applicable phase deadline\nRaise a {system} development request for the {critM} Mandatory and {critCM} Conditional Mandatory critical fields\nMap the {mapping} existing fields to PINT AE formats and configure ASP defaults for {asp} fields',
+    exec: '{phaseLine} Of the {applicable} applicable fields, {critical} are critical gaps that need new fields in {system}, and {noncrit} are non-critical: {mapping} existing fields need PINT AE mapping{aspSent}. The critical gaps sit in {critareas}.',
+    priority: 'Confirm the ASP appointment ({aspDeadline}) and agree the integration method\nRaise a {system} development request for the {critM} Mandatory and {critCM} Conditional Mandatory critical fields\nMap the {mapping} existing fields to PINT AE formats{aspPart}',
     reg: 'Legal framework | Tax Procedures and VAT law amendments; Ministerial Decisions 243/2025 (scope) and 244/2025 (implementation); PINT AE mandatory fields | All B2B and B2G tax invoices and credit notes issued by {client} are in scope\n'
-      + 'Implementation phase | Revenue ≥ AED 50m: appoint an accredited ASP by 30 October 2026, e-invoicing from 1 January 2027; below AED 50m: ASP by 31 March 2027, from 1 July 2027; government entities: ASP by 31 March 2027, from 1 October 2027 | Confirm {client}\'s phase from its annual turnover\n'
+      + (phase() ? `Implementation phase | Revenue ${phase().rev}: appoint an accredited ASP by ${phase().asp}; mandatory e-invoicing from ${phase().live} | Turnover ~AED ${phase().t} – ${phase().n}\n`
+        : 'Implementation phase | Revenue ≥ AED 50m: appoint an accredited ASP by 30 October 2026, e-invoicing from 1 January 2027; below AED 50m: ASP by 31 March 2027, from 1 July 2027; government entities: ASP by 31 March 2027, from 1 October 2027 | Confirm {client}\'s phase from its annual turnover\n')
       + 'Exchange model | Five-corner Peppol model – PINT AE XML exchanged and validated through ASPs, with tax data reported to the FTA | {system} must produce the full PINT AE dataset for one appointed ASP\n'
       + 'Timing of issue | E-invoices and e-credit notes follow VAT timelines – within 14 days of the date of supply or receipt of advances, whichever is earlier | Advance and proforma-based billing must be reviewed\n'
       + 'Exclusions | Limited – e.g., sovereign government activities, certain financial services, international air transport | Confirm that no exclusion applies to {client}\'s supplies\n'
-      + 'Penalties | Cabinet Decision 106/2025: AED 5,000 per month for not implementing; AED 100 per document (max AED 5,000/month) for not issuing or transmitting | Exposure from the go-live date if the ASP or {system} build is not ready',
+      + 'Penalties | Cabinet Decision 106/2025: AED 5,000 per month for not implementing; AED 100 per document (max AED 5,000/month) for not issuing or transmitting | Exposure from {liveDay} if the ASP or {system} build is not ready',
     env: `Legal entity | ${d(ans('q', 1))} | Seller TIN, licence number, issuing authority and emirate to be configured as per licence\n`
       + `ERP / billing system | ${d(ans('q', 5) || S.meta.system)} | Confirm who owns the PINT AE development\n`
       + `Volume & numbering | ${d([ans('q', 7), ans('q', 8)].filter(Boolean).join(' '))} | Numbering must meet the unique-ID rule; confirm the volume suits the integration method\n`
@@ -1012,19 +1102,19 @@ function defaults() {
       + `Customer master | ${d(ans('doc', 5))} | Add buyer TIN endpoint, scheme, country and emirate codes; validate completeness\n`
       + `Billing model | ${d([ans('q', 9), ans('q', 10)].filter(Boolean).join(' '))} | Invoicing period and transaction-type flags required`,
     taxcat: `Standard Rate – S (5%) | Applicable\nZero-Rated – Z | ${yn('q', 15)}\nExempt – E | ${yn('q', 15)}\nOut of Scope – O | ${yn('q', 15)}\nReverse Charge – AE | ${yn('sc', 10)}`,
-    usecase: [...uc, 'Credit notes | Invoice type code 381 with the preceding invoice reference and issue date; map reasons to the PINT AE reason code list | Action required'].join('\n'),
+    usecase: [...uc, 'Credit notes | Invoice type code 381 with the preceding invoice reference and issue date; map reasons to the PINT AE reason code list | Action required', ...extra].join('\n'),
     integ: 'REST API | Real-time {system}–ASP integration | Real-time, automated, scalable | Development effort in {system} | Recommended\nSFTP | Scheduled batch file exchange | Secure, reliable; workable at low volumes | Not real-time; file format dependencies | Fallback option\n'
       + 'File Upload | Manual XLSX upload via the ASP portal | Simple, low cost, quick start | Manual effort; error risk | Contingency only\nManual Entry | Direct entry in the ASP portal | No integration required | Time-consuming; error-prone | Not recommended',
     integmodel: 'REST API between {system} and the appointed ASP. The {critical} critical fields and the API payload must be delivered by {client}\'s IT team; SFTP batch exchange is a workable fallback at low volumes. ASP appointment and the integration method are still to be confirmed by {client}.' + (ans('q', 20) ? ` Planned method per the client: ${cut(ans('q', 20), 120)}` : ''),
-    actions: 'Immediate | Confirm the ASP appointment and finalise the integration method | {client} + ASP\nImmediate | Raise a {system} development request for {critM} Mandatory + {critCM} CM critical fields | {client} (Finance + IT)\n'
+    actions: 'Immediate | Confirm the ASP appointment ({aspDeadline}) and finalise the integration method | {client} + ASP\nImmediate | Raise a {system} development request for {critM} Mandatory + {critCM} CM critical fields | {client} (Finance + IT)\n'
       + 'Short-term | Update the customer master – buyer TIN endpoint, scheme, country and emirate codes; share an extract for validation | {client}\nShort-term | Configure seller data and ASP defaults; align advance billing to VAT timelines | {client} + ASP\n'
-      + 'Validation | Map the {noncrit} existing fields and test invoices, credit notes and special scenarios end to end | All teams\nGo-Live | Production go-live on the date set by the client\'s phase | All teams',
+      + 'Validation | Map the {noncrit} existing fields and test invoices, credit notes and special scenarios end to end | All teams\nGo-Live | Production go-live on {liveDay}' + (phase() ? ` (${phase().n} – Ministerial Decision 244/2025)` : '') + ' | All teams',
     risks: 'ASP appointment and integration method not confirmed in time for go-live – penalty exposure\n{critical} critical fields unavailable in {system}, leading to PINT AE validation failures\nLine amounts, VAT breakdown and document totals that do not reconcile in PINT AE\nCustomer master incomplete – buyer TIN endpoints missing or not validated\nSpecial billing scenarios (credit notes, advances, summary or periodic invoices) not covered by the build',
     success: 'ASP and integration method confirmed without further delay\n{system} development plan covering all {critical} critical fields\nCustomer master validated before integration testing\nAgreed PINT AE codes for transaction type, UoM and credit-note reasons\nEnd-to-end testing of invoices, credit notes and special billing scenarios',
-    final: '{client}\'s invoice data currently supports {ready} of the {nM} FTA Mandatory fields ({readyPct}%). Of the {applicable} applicable fields, {critical} are critical gaps that need new fields in {system}, while {noncrit} non-critical gaps can be closed through mapping and ASP configuration. Confirming the ASP, completing the {system} build and end-to-end testing are the immediate priorities.'
+    final: '{client}\'s invoice data currently supports {ready} of the {nM} FTA Mandatory fields ({readyPct}%). Of the {applicable} applicable fields, {critical} are critical gaps that need new fields in {system}, while {noncrit} non-critical gaps can be closed through mapping and ASP configuration. {finalLead} the ASP, completing the {system} build and end-to-end testing are the immediate priorities.'
   };
 }
-const NARR = [['profile','Business overview (paragraph)',4], ['exec','Executive summary paragraph',5], ['priority','Priority actions (one per line)',4], ['reg','Regulatory framework (Requirement | FTA / MoF position | Implication)',9],
+const NARR = [['matrix','Reading the matrix (one paragraph per line)',3], ['profile','Business overview (paragraph)',4], ['exec','Executive summary paragraph',5], ['priority','Priority actions (one per line)',4], ['reg','Regulatory framework (Requirement | FTA / MoF position | Implication)',9],
   ['env','Current environment (Component | Current state | Implication)',8], ['taxcat','Tax categories (Category | Applicability)',5], ['usecase','Use case recommendations (Use case | Recommendation | Status)',8],
   ['integ','Integration methods (Method | Description | Pros | Cons | Recommendation)',6], ['integmodel','Recommended integration model (paragraph)',4], ['actions','Action plan (Phase | Action | Owner)',7],
   ['risks','Key risks (one per line)',6], ['success','Key success factors (one per line)',6], ['final','Final remarks (paragraph)',5]];
@@ -1068,16 +1158,16 @@ function slides() {
       ['Documents reviewed', cut(docs, 200) || '–'], ['Client questionnaires', 'E-invoicing checklist, documents list and transaction-scenario questionnaire'],
       ['Business scenarios', `${S.sc.filter(x => x.r).length} scenarios + 5 tax categories reviewed`]], {rowH:.55})]);
   // 4,5 narrative tables
-  add('Regulatory Framework & Timeline', 'FTA / Ministry of Finance e-invoicing requirements applied to ' + cn, [TB(.5, 1.4, [2.3, 5.5, 4.53], ['Requirement', 'FTA / MoF Position', 'Implication for ' + cn],
+  add('Regulatory Framework & Timeline', 'FTA / Ministry of Finance e-invoicing requirements applied to ' + (S.meta.short || cn), [TB(.5, 1.4, [2.3, 5.5, 4.53], ['Requirement', 'FTA / MoF Position', 'Implication for ' + (S.meta.short || cn)],
     nRows('reg', st).map(r => [{t:r[0], b:1}, r[1] || '', r[2] || '']), {rowH:.78, size:10})]);
   add('Current Environment', 'Existing ERP, invoice output, customer data and integration landscape', [TB(.5, 1.4, [2.3, 5.5, 4.53], ['Component', 'Current State', 'E-Invoicing Implication'], nRows('env', st).map(r => [r[0] || '', r[1] || '', r[2] || '']), {rowH:.7, size:10})]);
   // 6 classification
   add('Field Classification Framework', 'How each field is classified – FTA requirement level and gap severity', [TB(.5, 1.4, [2.6, 5.4, 1.0, 3.33], ['Classification', 'Definition (FTA PINT AE data dictionary / workings)', 'Fields', 'Treatment in this report'],
     [[{t:'Mandatory (M)', c:CL.red, b:1}, 'Required on every UAE PINT AE tax invoice and credit note', {t:String(st.critM + st.nonM), b:1, a:'center'}, 'Populate from the ERP before go-live'],
      [{t:'Conditional Mandatory (CM)', c:CL.amber, b:1}, 'Required only when a stated condition applies – e.g., credit note, card payment, credit transfer, period billing', {t:String(st.critCM + st.nonCM), b:1, a:'center'}, 'Populate where the scenario applies'],
-     [{t:'Critical gap', c:CL.red, b:1}, 'Needs a new ERP field and data capture (codes 3, 5, 6, 7)', {t:String(st.crit.length), b:1, c:CL.red, a:'center'}, 'New ERP field and data capture – immediate action'],
-     [{t:'Non-critical gap', c:CL.amber, b:1}, 'No new ERP field: mapping, ASP default or derive, or recommended optional (codes 1, 2, 4, 8, 9)', {t:String(st.non.length), b:1, a:'center'}, 'Mapping or ASP configuration']], {rowH:.85, size:10.5}),
-    T(.5, 5.4, 12.3, .7, `Each field carries one FTA requirement level (M / CM) and one gap severity (Critical / Non-critical). Totals reconcile to the ${st.app.length} applicable fields in the detailed workings; ${st.nonO} optional field(s) are available in the client's data and recommended for inclusion; ${st.na} field(s) marked Not Applicable are not counted.`, {size:10, italic:true, color:CL.mu})]);
+     [{t:'Critical gap', c:CL.red, b:1}, 'M / CM field not available in current invoice data (codes 3, 5, 6, 7)', {t:String(st.crit.length), b:1, c:CL.red, a:'center'}, 'New ERP field and data capture – immediate action'],
+     [{t:'Non-critical gap', c:CL.amber, b:1}, 'Field exists but needs PINT AE mapping, or can be defaulted by the ASP (codes 1, 2, 4, 8, 9)', {t:String(st.non.length), b:1, a:'center'}, 'Mapping or ASP configuration']], {rowH:.85, size:10.5}),
+    T(.5, 5.4, 12.3, .7, `Each field carries one FTA requirement level (M / CM) and one gap severity (Critical / Non-critical). Totals reconcile to the ${st.app.length} applicable fields in the detailed workings; ${st.nonO} optional field(s)${st.nonO && st.nonO <= 4 ? ' (' + st.non.filter(r => r.f.m === 'Optional').map(r => r.f.f).join(', ') + ')' : ''} are available in the client's data and recommended for inclusion; ${st.na} field(s) marked Not Applicable are not counted.`, {size:10, italic:true, color:CL.mu})]);
   // 7 results
   const tot = st.app.length || 1, cp = Math.round(100 * st.crit.length / tot);
   add('Gap Assessment Results', `Gap severity across the ${st.app.length} applicable FTA fields in the detailed workings`, [{k:'donut', x:.9, y:1.5, w:4.6, h:4.6, data:[[st.crit.length, CL.red], [st.non.length, CL.blue]]},
@@ -1093,24 +1183,25 @@ function slides() {
     TB(7.9, 1.4, [2.2, .85, .95, .93], ['FTA Level', 'Critical', 'Non-crit.', 'Total'], [lvRow('Mandatory', 'Mandatory (M)', CL.red), lvRow('Conditional Mandatory', 'Conditional Mandatory (CM)', CL.amber), lvRow('Optional', 'Optional', CL.blue),
       [{t:'Total', b:1, f:CL.card}, {t:String(st.crit.length), b:1, c:CL.red, a:'center', f:CL.card}, {t:String(st.non.length), b:1, a:'center', f:CL.card}, {t:String(st.app.length), b:1, a:'center', f:CL.card}]], {rowH:.42, size:10}),
     NAVYBOX(7.9, 4.0, 4.93, 2.5), T(8.15, 4.15, 4.4, .35, 'Reading the matrix', {size:14, bold:true, color:CL.white, font:'Cambria'}),
-    T(8.15, 4.6, 4.45, 1.8, `All ${st.critM} Mandatory critical gaps block compliant issuance of every invoice and must be closed before go-live.\n${st.critCM} Conditional Mandatory critical gaps apply to the scenarios this client uses.`, {size:10.5, color:CL.white, lh:1.4})]);
+    T(8.15, 4.6, 4.45, 1.8, nLines('matrix', st).join('\n'), {size:10.5, color:CL.white, lh:1.4})]);
   // 9 use case applicability
   add('Use Case Applicability', 'Special scenarios and tax categories – per client use-case questionnaire and checklist', [TB(.5, 1.4, [2.4, 1.4, 3.7], ['Scenario', 'Applicability', 'Action / Observation'],
-    D.sc.flatMap((s, i) => S.sc[i].h ? [] : [(() => { const a = yn('sc', i + 1); return [s[1], {t:a, b:1, c:a === 'Applicable' ? CL.green : a === 'To confirm' ? CL.amber : CL.mu}, cut(S.sc[i].c, 80) || '–'] })()]), {rowH:.46, size:9}),
+    D.sc.flatMap((s, i) => S.sc[i].h ? [] : [(() => { const a = yn('sc', i + 1); return [s[1], {t:a, b:1, c:a === 'Applicable' ? CL.green : a === 'To confirm' ? CL.amber : CL.mu}, cut(S.sc[i].c, 80) || (a === 'Applicable' ? UC[s[1]] : a === 'Not applicable' ? UCNO[s[1]] : '') || '–'] })()]), {rowH:.46, size:9}),
     TB(8.3, 1.4, [2.4, 2.13], ['Tax Category', 'Current Applicability'], nRows('taxcat', st).map(r => [r[0] || '', {t:r[1] || '', b:1, c:/^Applicable/.test(r[1]) ? CL.green : CL.mu}]), {rowH:.5, size:10})]);
   // 10 use case recommendations
   page(nRows('usecase', st), 8).forEach((rs, i, all) => add('Use Case Analysis & Recommendations', 'Recommendations arising from the questionnaire, sample data and field mapping' + (all.length > 1 ? ` (${i + 1} of ${all.length})` : ''),
-    [TB(.5, 1.4, [2.6, 7.9, 1.83], ['Use Case', 'Recommendation', 'Status'], rs.map(r => [{t:r[0] || '', b:1}, r[1] || '', {t:r[2] || '', b:1, a:'center', c:/action/i.test(r[2]) ? CL.red : CL.navy}]), {rowH:.58, size:10})]));
+    [TB(.5, 1.4, [2.6, 7.9, 1.83], ['Use Case', 'Recommendation', 'Status'], rs.map(r => [{t:r[0] || '', b:1}, r[1] || '', {t:r[2] || '', b:1, a:'center', c:/action/i.test(r[2]) ? CL.red : /future/i.test(r[2]) ? CL.amber : CL.navy}]), {rowH:.58, size:10})]));
+  const grpTxt = rs => { const g = [...new Set(rs.map(r => r.f.g))]; return g.length > 2 ? 'Fields' : g.length === 1 ? `${g[0]} fields` : `${g.slice(0, -1).join(', ')} and ${g.slice(-1)} fields` };
   // critical gaps
   const cr = [...st.crit.filter(r => r.f.m === 'Mandatory'), ...st.crit.filter(r => r.f.m !== 'Mandatory')];
-  page(cr, 9).forEach((rs, p, all) => add(`Critical Gaps (${cr.length}) – Required Actions`, `Fields not available in current data – new ERP field and data capture required (${p + 1} of ${all.length})`,
+  page(cr, 9).forEach((rs, p, all) => add(`Critical Gaps (${cr.length}) – Required Actions`, `${grpTxt(rs)} not available in current data – new ERP field and data capture required (${p + 1} of ${all.length})`,
     [TB(.5, 1.4, [.6, 2.9, .75, 3.9, 3.4, .78], ['SL', 'Field / Area', 'M / CM', 'Required Action / Recommendation', 'Remarks', 'Priority'], rs.map((r, i) => [{t:String(p * 9 + i + 1), a:'center'}, {t:r.f.f, s:r.f.g, b:1}, lc(r.f),
-      cut(r.m.rec, 120), cut(r.m.rem, 100), {t:'Immediate', b:1, a:'center', c:CL.red}]), {rowH:.52, size:8.5}),
-     T(.5, 6.62, 12.3, .3, 'M = Mandatory  |  CM = Conditional Mandatory  |  Immediate = required before go-live', {size:9, italic:true, color:CL.mu})], true));
+      cut(r.m.rec, 120), cut(r.m.rem, 100), (/^Payment Card/.test(r.f.f) ? {t:'Conditional', b:1, a:'center', c:CL.amber} : {t:'Immediate', b:1, a:'center', c:CL.red})]), {rowH:.52, size:8.5}),
+     T(.5, 6.62, 12.3, .3, 'M = Mandatory  |  CM = Conditional Mandatory  |  Immediate = required before go-live  |  Conditional = required only where its condition applies (e.g., card payments)', {size:9, italic:true, color:CL.mu})], true));
   // non-critical gaps
   const nc = [...st.non.filter(r => r.f.m !== 'Optional'), ...st.non.filter(r => r.f.m === 'Optional')];
-  page(nc, 9).forEach((rs, p, all) => add(`Non-Critical Gaps (${nc.length}) – Mapping & ASP Configuration`, `Fields that exist or can be defaulted by the ASP and need mapping (${p + 1} of ${all.length})`,
-    [TB(.5, 1.4, [.55, 2.7, .6, 1.9, 2.7, 3.0, .88], ['SL', 'Field / Data Group', 'FTA', 'Sample Data Field Name', 'Example (From sample)', 'Recommendation', 'Treatment'], rs.map((r, i) => [{t:String(p * 9 + i + 1), a:'center'}, {t:r.f.f, s:r.f.g, b:1}, lc(r.f),
+  page(nc, 9).forEach((rs, p, all) => add(`Non-Critical Gaps (${nc.length}) – Mapping & ASP Configuration`, `${grpTxt(rs)} requiring mapping or ASP configuration (${p + 1} of ${all.length})`,
+    [TB(.5, 1.4, [.55, 2.7, .6, 1.9, 2.7, 3.0, .88], ['SL', 'Field / Data Group', 'FTA', 'Sample Data Field Name', 'Example (General & From sample)', 'Recommendation', 'Treatment'], rs.map((r, i) => [{t:String(p * 9 + i + 1), a:'center'}, {t:r.f.f, s:r.f.g, b:1}, lc(r.f),
       {t:colLabel(r.m.col) || '–', a:'center'}, cut(r.m.ex, 70) || '–', cut(r.m.rec || (r.m.col && r.m.col !== PDF ? `Map ${colLabel(r.m.col)} to ${r.f.f}; confirm format and values.` : r.m.gap), 90), {t:[2, 4, 9].includes(+r.m.code) ? 'ASP default' : 'Map & align', b:1, a:'center', c:[2, 4, 9].includes(+r.m.code) ? CL.amber : CL.navy}]), {rowH:.52, size:8.5}),
      T(.5, 6.62, 12.3, .3, 'M = Mandatory  |  CM = Conditional Mandatory  |  Op = Optional  |  "–" = no field name / value in the sample data shared  |  Non-critical gaps need no new ERP field but must be mapped / configured before go-live', {size:9, italic:true, color:CL.mu})]));
   // integration
@@ -1125,8 +1216,8 @@ function slides() {
   // sample invoice
   const fv = n => { const f = FBY.get(nrm(n)); if (!f) return [n, '–']; const m = S.map[f.n]; return GAP_ST.includes(m.st) ? [n, {t:'Not available', c:CL.red, b:1}] : [n, cut(m.ex, 34) || '–'] };
   const kv = (x, y, w, title, names) => [T(x, y, w, .25, title.toUpperCase(), {size:9, bold:true, ls:1}), {k:'hr', x, y:y + .27, w, color:CL.navy},
-    ...names.flatMap((n, i) => { const [l, v] = fv(n), yy = y + .33 + i * .24, vt = typeof v === 'object' ? v : {t:v}; return [T(x, yy, w * .5, .24, l.replace(/^(Seller|Buyer) /, ''), {size:8, color:CL.mu}), T(x + w * .5, yy, w * .5, .24, vt.t, {size:8, color:vt.c || CL.navy, bold:vt.b})] })];
-  add('Sample Tax Invoice (Human Readable)', 'PINT AE field mapping – values from the first record of the sample data', [...kv(.5, 1.4, 3.0, 'Seller', ['Seller Name', 'Seller Vat Identifier', 'Seller Vat Scheme Code', 'Seller Legal Registration Identifier', 'Seller Legal Registration Identifier Type', 'Seller Address Line 1', 'Seller City', 'Seller Country Subdivision', 'Seller Country Code', 'Seller Electronic Address']),
+    ...names.flatMap((n, i) => { const [l, v] = fv(n), yy = y + .33 + i * .24, vt = typeof v === 'object' ? v : {t:v}; return [T(x, yy, w * .5, .24, l.replace(/^(Seller|Buyer) /, '').replace('Legal Registration Identifier Type', 'Legal reg. id. type').replace('Legal Registration Identifier', 'Legal reg. identifier').replace('Electronic Identifier', 'Electronic addr. scheme'), {size:8, color:CL.mu}), T(x + w * .5, yy, w * .5, .24, vt.t, {size:8, color:vt.c || CL.navy, bold:vt.b})] })];
+  add('Sample Tax Invoice (Human Readable)', (() => { const g = n => { const f = FBY.get(nrm(n)), m = f && S.map[f.n]; return m && !GAP_ST.includes(m.st) && m.ex ? m.ex : '' }; return [g('Invoice Number') && 'Invoice no. ' + g('Invoice Number'), g('Invoice Date') && 'Date ' + g('Invoice Date'), cn + ' invoice – PINT AE field mapping'].filter(Boolean).join('  |  ') })(), [...kv(.5, 1.4, 3.0, 'Seller', ['Seller Name', 'Seller Vat Identifier', 'Seller Vat Scheme Code', 'Seller Legal Registration Identifier', 'Seller Legal Registration Identifier Type', 'Seller Address Line 1', 'Seller City', 'Seller Country Subdivision', 'Seller Country Code', 'Seller Electronic Address']),
     ...kv(3.65, 1.4, 3.0, 'Buyer', ['Buyer Name', 'Buyer Vat Identifier', 'Buyer Vat Scheme Code', 'Buyer Address Line 1', 'Buyer City', 'Buyer Country Subdivision', 'Buyer Country Code', 'Buyer Electronic Address', 'Buyer Electronic Identifier']),
     ...kv(6.8, 1.4, 3.0, 'Invoice / document details', ['Invoice Number', 'Invoice Date', 'Invoice Type Code', 'Invoice Currency Code', 'Invoice Transaction Type Code', 'Payment Due Date', 'Business Process Type', 'Specification Identifier', 'Invoicing Period Start Date']),
     ...kv(9.95, 1.4, 2.88, 'Payment information', ['Payment Means Type Code', 'Payment Account Identifier', 'Payment Service Provider Identifier']),
@@ -1214,7 +1305,7 @@ function vRep() {
     <div class="grid"><div><label>Report date (blank = today)</label>${inp('meta.repDate', S.meta.repDate || '')}</div></div><p>
     <button id="bPrev">Preview slides</button> <button class="pri" id="bPptx">Download PPTX</button> <button class="pri" id="bPdf">Download PDF</button></p>
     <p class="sm">PDF opens the browser print dialog: choose <i>Save as PDF</i>, margins <i>None</i>, and tick <i>Background graphics</i>. Gap severity follows the recommendation code: codes 3, 5, 6, 7 are critical gaps; codes 1, 2, 4, 8, 9 are non-critical. Mandatory readiness = fields with code 1 / the 51 FTA mandatory fields.</p></div>
-  <div class="card"><h2>Narrative pages (editable)</h2><p class="sm">Prefilled from the checklist answers and the standard wording; edit freely. Tables: one row per line, columns separated by <b>|</b>. Tokens filled in at export: {client} {system} {critical} {critM} {critCM} {noncrit} {applicable} {mapping} {asp} {ready} {nM} {readyPct}.</p>
+  <div class="card"><h2>Narrative pages (editable)</h2><p class="sm">Prefilled from the checklist answers and the standard wording; edit freely. Tables: one row per line, columns separated by <b>|</b>. Tokens filled in at export: {client} {system} {critical} {critM} {critCM} {noncrit} {applicable} {mapping} {asp} {ready} {nM} {readyPct} {critareas} {aspDeadline} {liveDay} {goLive}.</p>
     ${NARR.map(narrEd).join('')}</div>
   <div id="prev"></div>`;
 }

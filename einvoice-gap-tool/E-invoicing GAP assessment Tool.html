@@ -593,7 +593,7 @@ function mapRow(f) {
   <td><select data-p="${p}st">${opt(ST, m.st, '— not reviewed —')}</select></td>
   <td>${ta(p+'gap', m.gap)}</td><td>${ta(p+'rec', m.rec)}</td>
   <td><select data-p="${p}code">${opt(Object.keys(RC), m.code, '—')}</select><div class="sm">${esc(RC[m.code]||'')}</div></td>
-  <td>${f.lk ? msBox(f, m) : ta(p+'ex', m.ex)}${ruleNote(f, m)}</td><td>${ta(p+'rem', m.rem)}</td><td><button data-reset-row="${f.n}" title="Back to the automatic match, status and texts for this field">Auto reset</button></td></tr>`;
+  <td>${f.lk ? msBox(f, m) : ta(p+'ex', m.ex)}${m.ex || m.imp ? `<button data-clear-ex="${f.n}" title="Empty this Example (selections and any imported text), then select again">Clear</button>` : ''}${ruleNote(f, m)}</td><td>${ta(p+'rem', m.rem)}</td><td><button data-reset-row="${f.n}" title="Back to the automatic match, status and texts for this field">Auto reset</button></td></tr>`;
 }
 const preview = src => {
   const d = DATA[src], cur = +(src === 'cm' ? S.cm.hdr : S.meta.hdrRow) || 1;
@@ -1218,6 +1218,7 @@ document.addEventListener('click', e => {
   else if (t.dataset.reset) { delete S.rep[t.dataset.reset]; save(); render() }
   else if (id === 'bRen') { const n = prompt('Client name for this engagement:', S.meta.client || ''); if (n?.trim()) { S.meta.client = n.trim(); save(); render() } }
   else if (t.dataset.usehdr) { const [s, n] = t.dataset.usehdr.split(':'); setHdr(s, +n) }
+  else if (t.dataset.clearEx) { const m = S.map[+t.dataset.clearEx]; m.ex = ''; m.imp = ''; m.e.ex = 1; save(); keep(render) }   // e.ex: the automatic example does not refill it
   else if (t.dataset.resetRow) resetRow(+t.dataset.resetRow);
   else if (t.dataset.view) viewFile(t.dataset.view);
   else if (t.dataset.rmf) removeFile(t.dataset.rmf);

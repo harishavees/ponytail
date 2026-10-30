@@ -906,7 +906,7 @@ const idbDo = (mode, fn) => idb().then(db => new Promise((res, rej) => { const t
 const fkey = id => store.cur + ':' + id;
 const fput = (id, blob) => idbDo('readwrite', s => s.put(blob, fkey(id)));
 const fget = id => idbDo('readonly', s => s.get(fkey(id)));
-const fdel = id => idbDo('readwrite', s => s.delete(fkey(id)));
+const fdel = id => { const k = fkey(id); return idbDo('readwrite', s => s.delete(k)) };   // key taken now: store.cur changes before the transaction runs
 let view = null;  // the PDF shown in the side panel: {id, name, url}
 const closeView = () => { if (view) URL.revokeObjectURL(view.url); view = null };
 async function upload(slot, files) {

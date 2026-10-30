@@ -627,7 +627,7 @@ function vMap() {
     <div><label>Map status</label><select id="fS">${optx(ST, filt.s, '— not reviewed —')}</select></div>
     <div><label>Code</label><select id="fK">${optx(Object.keys(RC), filt.k, '— no code —')}</select></div>
     <div style="flex:none"><label>&nbsp;</label><button id="fO" style="white-space:nowrap">${filt.open?'Unconfirmed only ✔':'Unconfirmed only'}</button></div></div>
-    <div class="bulk"><b id="selN">${selNote()}</b> <button id="bSelAll" title="Ticks every row matching the filters above">Select filtered rows</button> <button id="bSelNone">Clear</button> <button id="bBulk" class="pri">Apply to selected</button>
+    <div class="bulk"><b id="selN">${selNote()}</b> <button id="bSelAll" title="Ticks every row matching the filters above">Select filtered rows</button> <button id="bSelNone" title="Unticks the rows the filters currently show; ticks on hidden rows stay">Clear</button> <button id="bBulk" class="pri">Apply to selected</button>
       <select id="bulkCol" title="Sample column for the selected rows"><option value="@keep">Sample column: unchanged</option><option value="">Not Available</option><option value="${PDF}">Available in PDF</option></select>
       <select id="bulkSt" title="Map status for the selected rows">${opt(ST, '@keep', 'Map status: unchanged').replace('<option value="">','<option value="@keep">')}</select>
       <select id="bulkOk" title="Done tick for the selected rows"><option value="">Done: unchanged</option><option value="1">Mark as Done</option><option value="0">Mark as not Done</option></select>
@@ -1226,7 +1226,7 @@ document.addEventListener('click', e => {
   else if (id === 'bOtherAdd') { S.other.push({f:'', v:'', src:''}); save(); render() }
   else if (t.dataset.delother) { S.other.splice(+t.dataset.delother, 1); save(); render() }
   else if (id === 'bSelAll') { rows().forEach(f => SEL.add(f.n)); keep(render) }
-  else if (id === 'bSelNone') { SEL.clear(); keep(render) }
+  else if (id === 'bSelNone') { rows().forEach(f => SEL.delete(f.n)); keep(render) }   // only the rows the filters show
   else if (id === 'bBulk') {
     const c = document.getElementById('bulkCol').value, s = document.getElementById('bulkSt').value, ok = document.getElementById('bulkOk').value;
     if (!SEL.size) return alert('Tick the fields to change first.');

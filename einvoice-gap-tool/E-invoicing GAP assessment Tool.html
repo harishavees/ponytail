@@ -424,13 +424,16 @@ async function importGap(file) {
   if (h < 0) { gapMsg = 'The sheet has no "Data Dictionary Field" column.'; return render() }
   const hd = rows[h].map(c => v(c).toLowerCase().replace(/\s+/g, ' ')), ci = re => hd.findIndex(x => re.test(x));
   const C = {f:ci(/^data dictionary field$/), col:ci(/^sample data field name/), st:ci(/^map status/), gap:ci(/^gap identified/), rec:ci(/^detailed recommendation/), ex:ci(/^example$/), rem:ci(/^remarks/), code:ci(/^recommendation code/)};
-  const keyFor = name => {   // sample column name in the sheet -> the key used by the Mapping tab; null = not loaded in this session
+  const keyFor = (name, fn) => {   // sample column name in the sheet -> the key used by the Mapping tab
     if (!name || /^(n\/a|not available)$/i.test(name)) return '';
     if (/^available in pdf$/i.test(name)) return PDF;
-    const cm = /^customer master:\s*(.*)$/i.exec(name), want = (cm ? 'cm:' + cm[1] : name).trim().toLowerCase();
-    let c = S.cols.find(c => c.name.toLowerCase() === want);
-    if (!c) { c = {name:(cm ? 'cm:' + cm[1] : name).trim(), src:cm ? 'cm' : 'inv', filled:0, total:0, ex:'', stub:1}; S.cols.push(c); added++ }   // no sample loaded for it yet: keep the name so the mapping survives
-    return c.name;
+    const cm = /^customer master:\s*(.*)$/i.exec(name), nm = (cm ? cm[1] : name).trim(), low = k => S.cols.find(c => c.name.toLowerCase() === k.toLowerCase());
+    // an unprefixed name can be an invoice sample column or a customer master column of the same name: take the one no other field uses
+    const cands = cm ? ['cm:' + nm] : [nm, 'cm:' + nm];
+    for (const k of cands) { const c = low(k); if (c && !ownerOf(c.name, fn)) return c.name }
+    const k = cm || !low(nm) ? cands[0] : cands[1];   // nothing free: keep the name as a column without data, so the mapping survives
+    if (!low(k)) { S.cols.push({name:k, src:isCm(k) ? 'cm' : 'inv', filled:0, total:0, ex:'', stub:1}); added++ }
+    return low(k).name;   // still owned by another field: the caller reports it
   };
   let n = 0, skipped = 0, badStatus = 0, added = 0; const conflicts = [], unloaded = [];
   for (const r of rows.slice(h + 1)) {
@@ -439,7 +442,7 @@ async function importGap(file) {
     const st = ST.find(s => s.toLowerCase() === v(r[C.st]).toLowerCase());
     if (st) { m.st = st; m.e.st = 1 } else if (v(r[C.st])) badStatus++;
     else { m.st = 'Not Applicable'; m.e.st = 1 }   // a blank status in the worked workbook
-    const cell = C.col >= 0 ? v(r[C.col]) : '', key = cell ? keyFor(cell) : undefined;
+    const cell = C.col >= 0 ? v(r[C.col]) : '', key = cell ? keyFor(cell, f.n) : undefined;
     if (key === null) { m.imp = cell; unloaded.push(f.f) }
     else if (key !== undefined) {
       const o = key && key !== PDF && ownerOf(key, f.n);

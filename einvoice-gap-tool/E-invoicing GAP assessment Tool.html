@@ -435,10 +435,10 @@ async function importGap(file) {
     if (!low(k)) { S.cols.push({name:k, src:isCm(k) ? 'cm' : 'inv', filled:0, total:0, ex:'', stub:1}); added++ }
     return low(k).name;   // still owned by another field: the caller reports it
   };
-  let n = 0, skipped = 0, badStatus = 0, added = 0; const conflicts = [], unloaded = [];
+  let n = 0, skipped = 0, badStatus = 0, added = 0, absent = 0; const seen = new Set(); const conflicts = [], unloaded = [];
   for (const r of rows.slice(h + 1)) {
     const f = FBY.get(nrm(v(r[C.f]))); if (!f) { if (v(r[C.f])) skipped++; continue }
-    const m = S.map[f.n]; n++;
+    const m = S.map[f.n]; n++; seen.add(f.n);
     const st = ST.find(s => s.toLowerCase() === v(r[C.st]).toLowerCase());
     if (st) { m.st = st; m.e.st = 1 } else if (v(r[C.st])) badStatus++;
     else { m.st = 'Not Applicable'; m.e.st = 1 }   // a blank status in the worked workbook
@@ -451,6 +451,7 @@ async function importGap(file) {
     for (const k of ['gap', 'rec', 'ex', 'rem']) if (C[k] >= 0 && v(r[C[k]])) { m[k] = v(r[C[k]]); m.e[k] = 1 }
     const code = parseInt(v(r[C.code]), 10); if (code >= 1 && code <= 9) { m.code = code; m.e.code = 1 }
   }
+  for (const f of D.F) if (!seen.has(f.n)) { const m = S.map[f.n]; m.st = 'Not Applicable'; m.e.st = 1; absent++ }   // a field the workbook does not list
   const sm = wb.SheetNames.find(x => /^summary$/i.test(x.trim()));
   if (sm) for (const r of XLSX.utils.sheet_to_json(wb.Sheets[sm], {header:1, defval:''})) {
     const k = v(r.find(c => v(c)));  const val = v(r[r.findIndex(c => v(c)) + 1]);
@@ -459,7 +460,7 @@ async function importGap(file) {
   }
   if (DATA.inv || DATA.cm) validateAll();
   D.F.forEach(apply); save();
-  gapMsg = `Imported ${n} fields from "${sn}"` + (skipped ? `; ${skipped} rows are not PINT fields known to the tool` : '') + (badStatus ? `; ${badStatus} statuses were not in the status list and were skipped` : '')
+  gapMsg = `Imported ${n} fields from "${sn}"` + (absent ? `; ${absent} fields not in the workbook were set to Not Applicable` : '') + (skipped ? `; ${skipped} rows are not PINT fields known to the tool` : '') + (badStatus ? `; ${badStatus} statuses were not in the status list and were skipped` : '')
     + (added ? `; ${added} sample columns from the workbook were added to the Sample column list (load the sample file to fill in their data)` : '')
     + (conflicts.length ? `; ${conflicts.length} columns were not set because another field already uses them: ${conflicts.slice(0, 5).join('; ')}${conflicts.length > 5 ? '…' : ''}` : '') + '.';
   if (wb.SheetNames.some(x => /^client checklist$/i.test(x.trim()))) { await importQ(file); gapMsg += ' ' + qMsg; render(); return }

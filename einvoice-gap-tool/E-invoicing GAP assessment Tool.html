@@ -526,12 +526,13 @@ function vQ() {
   const block = key => {
     const [title, cols, resp] = spec[key], rows = S[key], un = rows.filter(x => !x.r).length;
     return `<div class="card"><h2>${title} <span class="tag">${rows.length-un}/${rows.length} answered</span></h2><div class="wrap"><table>
-      <tr><th>No.</th>${cols.map(c=>`<th>${c}</th>`).join('')}<th>Response</th>${key==='q'?'<th>Details / Comments</th><th>Document / Reference</th>':'<th>Comments</th>'}<th></th></tr>
+      <tr><th>No.</th>${cols.map(c=>`<th>${c}</th>`).join('')}<th>Response</th>${key==='q'?'<th>Details / Comments</th><th>Document / Reference</th>':'<th>Comments</th>'}<th title="Tick to use this row in the report">In report</th><th></th></tr>
       ${rows.map((a,i) => { const base = DK[key][i], w = !a.r || (/Yes|Partial/.test(a.r) && !a.c && !a.d);
         const text = base ? base.slice(1).map(x => `<td>${esc(x)}</td>`).join('') : key === 'q' ? `<td>${ta(`q.${i}.t`, a.t || '')}</td>` : `<td>${ta(`${key}.${i}.t`, a.t || '')}</td><td>${ta(`${key}.${i}.u`, a.u || '')}</td>`;
         return `<tr class="${w?'warn':''}"><td>${i + 1}</td>${text}
         <td><select data-p="${key}.${i}.r">${opt(resp, a.r, '—')}</select></td>
         ${key==='q' ? `<td>${ta(`q.${i}.c`, a.c)}</td><td>${ta(`q.${i}.d`, a.d)}</td>` : `<td>${ta(`${key}.${i}.c`, a.c)}</td>`}
+        <td><input type="checkbox" data-show="${key}.${i}"${a.h ? '' : ' checked'} style="width:auto" title="Show this row's answer in the report"></td>
         <td>${base ? '' : `<button data-delrow="${key}:${i}" title="Remove this row">Remove</button>`}</td></tr>`}).join('')}
       </table></div><p><button data-addrow="${key}">Add row</button> <span class="sm">Added rows also appear in the downloaded checklist.</span></p></div>`;
   };
@@ -954,7 +955,7 @@ const vSamples = () => `<p class="sm">Fill in what the sample invoice, credit no
 const CL = {navy:'1C1B4B', dark:'111133', red:'E8402F', card:'ECEAF6', zebra:'F3F3FA', line:'D6D6E7', green:'3C7D22', amber:'B8860B', mu:'6B6B80', blue:'8F8FC4', white:'FFFFFF'};
 const GAP_ST = ['Field not available', 'No data available'], DIRECT = /^Field is (direct|indirect) match/;
 const cut = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s };
-const ans = (key, i, k = 'c') => S[key][i - 1]?.[k] || '';  // 1-based question number
+const ans = (key, i, k = 'c') => S[key][i - 1]?.h ? '' : S[key][i - 1]?.[k] || '';   // h: the row is switched off for the report  // 1-based question number
 
 // classify every field: crit = M/CM the client lacks; non = applicable but only needs mapping/ASP set-up; rec = optional and absent; na/open as set by the consultant
 function stat() {
@@ -982,12 +983,12 @@ const UC = {'Free Zone / Designated Zone':'Flag transaction type code 10000000 f
   'Continuous / Periodic Supply':'Flag transaction type code 00001000 and capture invoicing period start and end dates', 'Agent Billing':'Flag transaction type code 00000100 and capture the principal ID',
   'E-Commerce':'Flag transaction type code 00000010 for supplies through e-commerce', 'Exports':'Flag transaction type code 00000001 for exports', 'Self-Billing':'Use invoice type code 389 (self-billed invoice) / 261 (self-billed credit note)',
   'Domestic Reverse Charge':'Use VAT category code AE and the reverse-charge treatment', 'Intercompany':'Related-party invoices follow the standard e-invoicing flow; no relief without a VAT group'};
-const yn = (key, i) => { const r = S[key][i - 1]?.r; return r === 'Yes' ? 'Applicable' : r === 'No' || r === 'Not Applicable' ? 'Not applicable' : 'To confirm' };
+const yn = (key, i) => { const r = S[key][i - 1]?.h ? '' : S[key][i - 1]?.r; return r === 'Yes' ? 'Applicable' : r === 'No' || r === 'Not Applicable' ? 'Not applicable' : 'To confirm' };
 function defaults() {
   const d = c => cut(c, 170) || '–';
   const I = S.info, co = [I.legalName, I.activity, I.licNo && `trade licence ${I.licNo}${I.authority ? ' (' + I.authority + ')' : ''}`, I.trn && 'TRN ' + I.trn].filter(Boolean);
   const pr = [...co, ans('q', 4), ans('q', 7)].filter(Boolean).map(s => s.replace(/[.\s]+$/, '')).join('. ');
-  const uc = D.sc.map((s, i) => S.sc[i].r === 'Yes' ? `${s[1]} | ${UC[s[1]] || 'Review against the PINT AE data model'} | Action required` : '').filter(Boolean);
+  const uc = D.sc.map((s, i) => S.sc[i].r === 'Yes' && !S.sc[i].h ? `${s[1]} | ${UC[s[1]] || 'Review against the PINT AE data model'} | Action required` : '').filter(Boolean);
   return {
     profile: pr ? pr + '.' : '{client} issues invoices and credit notes from {system}. Add a short business profile here: activities, licences, TRN, turnover and monthly invoice volume.',
     exec: 'Of the {applicable} applicable fields, {critical} are critical gaps that need new fields in {system}, and {noncrit} are non-critical: {mapping} existing fields need PINT AE mapping and {asp} can be defaulted or derived by the ASP. Add the client\'s phase and deadline, and where the critical gaps sit, here.',
@@ -1054,7 +1055,7 @@ function slides() {
     T(.5, 3.1, 6.9, 3.7, tx(nv('exec')), {size:12, lh:1.5}), NAVYBOX(7.9, 3.0, 4.93, 3.85), T(8.2, 3.2, 4.4, .4, 'Priority Actions', {size:18, bold:true, color:CL.white, font:'Cambria'}),
     {k:'bl', x:8.2, y:3.75, w:4.4, h:3.0, items:nLines('priority', st), size:11, color:CL.white}]);
   // 3 business overview & scope
-  const docs = D.docs.filter((d, i) => /^(Yes|Partial)$/.test(S.doc[i].r)).map(d => d[1]).join(', ');
+  const docs = D.docs.filter((d, i) => /^(Yes|Partial)$/.test(S.doc[i].r) && !S.doc[i].h).map(d => d[1]).join(', ');
   add('Business Overview & Assessment Scope', 'Business profile, transaction landscape and assessment coverage', [T(.5, 1.4, 12.3, 1.2, tx(nv('profile')), {size:12, lh:1.4}),
     TB(.5, 2.75, [3.4, 8.9], ['Scope Item', 'Coverage'], [['FTA field analysis', {t:`${st.rows.length - st.open} fields assessed (${st.app.length} applicable: ${st.critM + st.nonM} Mandatory + ${st.critCM + st.nonCM} CM; ${st.nonO} optional)`, b:1}],
       ['Critical gaps', {t:`${st.crit.length} – new ERP fields required`, c:CL.red, b:1}], ['Non-critical gaps', {t:`${st.non.length} (mapping – ${st.non.length - st.asp} and ASP default / derive – ${st.asp})`, b:1}],
@@ -1089,7 +1090,7 @@ function slides() {
     T(8.15, 4.6, 4.45, 1.8, `All ${st.critM} Mandatory critical gaps block compliant issuance of every invoice and must be closed before go-live.\n${st.critCM} Conditional Mandatory critical gaps apply to the scenarios this client uses.`, {size:10.5, color:CL.white, lh:1.4})]);
   // 9 use case applicability
   add('Use Case Applicability', 'Special scenarios and tax categories – per client use-case questionnaire and checklist', [TB(.5, 1.4, [2.4, 1.4, 3.7], ['Scenario', 'Applicability', 'Action / Observation'],
-    D.sc.map((s, i) => { const a = yn('sc', i + 1); return [s[1], {t:a, b:1, c:a === 'Applicable' ? CL.green : a === 'To confirm' ? CL.amber : CL.mu}, cut(S.sc[i].c, 80) || '–'] }), {rowH:.46, size:9}),
+    D.sc.flatMap((s, i) => S.sc[i].h ? [] : [(() => { const a = yn('sc', i + 1); return [s[1], {t:a, b:1, c:a === 'Applicable' ? CL.green : a === 'To confirm' ? CL.amber : CL.mu}, cut(S.sc[i].c, 80) || '–'] })()]), {rowH:.46, size:9}),
     TB(8.3, 1.4, [2.4, 2.13], ['Tax Category', 'Current Applicability'], nRows('taxcat', st).map(r => [r[0] || '', {t:r[1] || '', b:1, c:/^Applicable/.test(r[1]) ? CL.green : CL.mu}]), {rowH:.5, size:10})]);
   // 10 use case recommendations
   page(nRows('usecase', st), 8).forEach((rs, i, all) => add('Use Case Analysis & Recommendations', 'Recommendations arising from the questionnaire, sample data and field mapping' + (all.length > 1 ? ` (${i + 1} of ${all.length})` : ''),
@@ -1284,6 +1285,7 @@ document.addEventListener('change', async e => {
     catch (err) { alert('Could not open the project: ' + err.message) }
     t.value = '';
   }
+  else if (t.dataset.show) { const [k, i] = t.dataset.show.split('.'); S[k][+i].h = !t.checked; save() }
   else if (t.dataset.sel) { +t.dataset.sel; t.checked ? SEL.add(+t.dataset.sel) : SEL.delete(+t.dataset.sel); document.getElementById('selN').textContent = selNote() }
   else if (t.dataset.p && t.type === 'checkbox') { setP(t.dataset.p, t.checked); save(); t.closest('tr')?.classList.toggle('done', t.checked) }
   else if (t.dataset.p && /^(info|other)\./.test(t.dataset.p) && t.tagName === 'SELECT') setP(t.dataset.p, t.value);  // no redraw: the PDF viewer would reload

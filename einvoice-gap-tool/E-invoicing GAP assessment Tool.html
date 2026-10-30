@@ -382,8 +382,9 @@ function fromRows(src, rows) {
     const vals = body.map(r => r[i]).filter(v => String(v).trim() !== '');
     return {name:src === 'cm' ? 'cm:' + n : n, src, filled:vals.length, total:body.length, ex:vals.length ? fmt(vals[0]) : ''};
   }).filter(c => plain(c.name).trim());
+  const names = new Set(cols.map(c => c.name)), stubs = S.cols.filter(c => c.stub && srcOf(c) === src && !names.has(c.name));   // columns named by an imported workbook but not in this file
   const other = S.cols.filter(c => srcOf(c) !== src);
-  S.cols = src === 'inv' ? [...cols, ...other] : [...other, ...cols];
+  S.cols = src === 'inv' ? [...cols, ...stubs, ...other] : [...other, ...cols, ...stubs];
   if (src === 'cm') S.cm.records = body.length; else S.meta.records = body.length;
   DATA[src] = {rows, hdr, body, raw:rows.slice(0, 12)};
   fput('data-' + src, rows).catch(() => {});
@@ -427,14 +428,17 @@ async function importGap(file) {
     if (!name || /^(n\/a|not available)$/i.test(name)) return '';
     if (/^available in pdf$/i.test(name)) return PDF;
     const cm = /^customer master:\s*(.*)$/i.exec(name), want = (cm ? 'cm:' + cm[1] : name).trim().toLowerCase();
-    return S.cols.find(c => c.name.toLowerCase() === want)?.name ?? null;
+    let c = S.cols.find(c => c.name.toLowerCase() === want);
+    if (!c) { c = {name:(cm ? 'cm:' + cm[1] : name).trim(), src:cm ? 'cm' : 'inv', filled:0, total:0, ex:'', stub:1}; S.cols.push(c); added++ }   // no sample loaded for it yet: keep the name so the mapping survives
+    return c.name;
   };
-  let n = 0, skipped = 0, badStatus = 0; const conflicts = [], unloaded = [];
+  let n = 0, skipped = 0, badStatus = 0, added = 0; const conflicts = [], unloaded = [];
   for (const r of rows.slice(h + 1)) {
     const f = FBY.get(nrm(v(r[C.f]))); if (!f) { if (v(r[C.f])) skipped++; continue }
     const m = S.map[f.n]; n++;
     const st = ST.find(s => s.toLowerCase() === v(r[C.st]).toLowerCase());
     if (st) { m.st = st; m.e.st = 1 } else if (v(r[C.st])) badStatus++;
+    else { m.st = 'Not Applicable'; m.e.st = 1 }   // a blank status in the worked workbook
     const cell = C.col >= 0 ? v(r[C.col]) : '', key = cell ? keyFor(cell) : undefined;
     if (key === null) { m.imp = cell; unloaded.push(f.f) }
     else if (key !== undefined) {
@@ -453,7 +457,7 @@ async function importGap(file) {
   if (DATA.inv || DATA.cm) validateAll();
   D.F.forEach(apply); save();
   gapMsg = `Imported ${n} fields from "${sn}"` + (skipped ? `; ${skipped} rows are not PINT fields known to the tool` : '') + (badStatus ? `; ${badStatus} statuses were not in the status list and were skipped` : '')
-    + (unloaded.length ? `; ${unloaded.length} sample columns are not loaded, so the imported name is shown under the Sample column (load the sample in this tab, then pick them)` : '')
+    + (added ? `; ${added} sample columns from the workbook were added to the Sample column list (load the sample file to fill in their data)` : '')
     + (conflicts.length ? `; ${conflicts.length} columns were not set because another field already uses them: ${conflicts.slice(0, 5).join('; ')}${conflicts.length > 5 ? '…' : ''}` : '') + '.';
   if (wb.SheetNames.some(x => /^client checklist$/i.test(x.trim()))) { await importQ(file); gapMsg += ' ' + qMsg; render(); return }
   render();

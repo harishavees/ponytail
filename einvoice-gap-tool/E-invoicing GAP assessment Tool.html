@@ -1029,7 +1029,7 @@ const head = (title, sub, red) => [T(.5, .25, 10.8, .7, title, {size:28, bold:tr
   {k:'img', x:11.45, y:.22, w:1.45, h:.364, src:D.logo.light}];
 const TB = (x, y, cols, hd, rows, o = {}) => ({k:'tb', x, y, w:cols.reduce((a, b) => a + b, 0), cols, hd, rows, rowH:.5, headH:.4, size:9.5, hsize:10, ...o});
 const kpi = (x, y, w, h, label, value, sub, vcolor) => [R(x, y, w, h, CL.card, {r:.12}), T(x + .2, y + .15, w - .4, .25, label.toUpperCase(), {size:9, bold:true, color:CL.mu, ls:1.5}),
-  T(x + .2, y + .42, w - .4, .55, value, {size:26, bold:true, color:vcolor || CL.navy, font:'Cambria'}), T(x + .2, y + h - .45, w - .4, .4, sub, {size:9, color:CL.mu})];
+  T(x + .2, y + .42, w - .4, .55, value, {size:value.length > 18 ? 13 : value.length > 11 ? 18 : 26, bold:true, color:vcolor || CL.navy, font:'Cambria'}), T(x + .2, y + h - .5, w - .4, .45, sub, {size:9, color:CL.mu})];
 const NAVYBOX = (x, y, w, h) => R(x, y, w, h, CL.dark, {r:.12});
 const lvl = {Mandatory:['M', CL.red], 'Conditional Mandatory':['CM', CL.amber], Optional:['Op', CL.blue]};
 const lc = f => ({t:lvl[f.m][0], c:lvl[f.m][1], b:1, a:'center'});
@@ -1111,7 +1111,7 @@ function slides() {
   // action plan
   const ac = nRows('actions', st).slice(0, 7), ph = ac.length > 6 ? .76 : .85;
   add('Recommended Action Plan', 'Implementation roadmap from critical-gap closure to go-live', ac.flatMap((r, i) => { const y = 1.45 + i * ph; return [R(.5, y + .02, .5, .5, CL.navy, {ell:1}), T(.5, y + .12, .5, .3, String(i + 1), {size:14, bold:true, color:CL.white, align:'center', font:'Cambria'}),
-    T(1.3, y + .12, 1.9, .3, r[0] || '', {size:12, bold:true}), T(3.3, y + .02, 6.7, .55, r[1] || '', {size:11}), R(10.2, y + .08, 2.63, .4, CL.card, {r:.2}), T(10.2, y + .15, 2.63, .3, r[2] || '', {size:10, bold:true, align:'center'}), {k:'hr', x:.5, y:y + ph - .1, w:12.33, color:CL.line}] }));
+    T(1.3, y + .12, 1.9, .3, r[0] || '', {size:12, bold:true}), T(3.3, y + .02, 6.7, .55, r[1] || '', {size:11}), R(10.2, y + .08, 2.63, .4, CL.card, {r:.2}), T(10.2, y + .15, 2.63, .3, r[2] || '', {size:(r[2] || '').length > 32 ? 8 : 10, bold:true, align:'center'}), {k:'hr', x:.5, y:y + ph - .1, w:12.33, color:CL.line}] }));
   // sample invoice
   const fv = n => { const f = FBY.get(nrm(n)); if (!f) return [n, '–']; const m = S.map[f.n]; return GAP_ST.includes(m.st) ? [n, {t:'Not available', c:CL.red, b:1}] : [n, cut(m.ex, 34) || '–'] };
   const kv = (x, y, w, title, names) => [T(x, y, w, .25, title.toUpperCase(), {size:9, bold:true, ls:1}), {k:'hr', x, y:y + .27, w, color:CL.navy},

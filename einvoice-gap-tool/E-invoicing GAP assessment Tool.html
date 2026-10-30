@@ -204,7 +204,8 @@ async function newPw() {   // returns {s,h}, null for none, undefined if cancell
 }
 async function openSafe(id) { if (await unlock(id)) openEng(id); else renderEng() }
 function addEng(s) { const id = uid(); store.eng[id] = fix(s || fresh()); openEng(id) }
-function delEng() {
+async function delEng() {
+  if (!(await unlock(store.cur))) return;   // a protected engagement needs its password to be deleted
   if (!confirm(`Delete engagement "${engName(S)}"? This cannot be undone (use Save project first to keep a copy).`)) return;
   S.files.forEach(f => fdel(f.id).catch(() => {}));
   ['inv', 'cm'].forEach(s => fdel('data-' + s).catch(() => {}));

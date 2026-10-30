@@ -182,13 +182,34 @@ function step(d) {
 }
 const save = () => { store.eng[store.cur] = S; try { localStorage.setItem('eigap-v2', JSON.stringify(store)) } catch (_) {} pushHist() };
 function openEng(id) { closeView(); SEL.clear(); store.cur = id; S = fix(store.eng[id]); WBS = {inv:null, cm:null}; SHEET = {}; DATA = {inv:null, cm:null}; filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false}; POS = {}; tab = 0; qMsg = ''; save(); render(); restoreData() }
+// per-engagement password: a salted SHA-256 hash in the engagement. shortcut: a gate on opening, the data in this browser is not encrypted; encrypt it if the PC is shared
+const askPw = msg => new Promise(res => {
+  const d = document.createElement('dialog'); d.innerHTML = `<form method="dialog"><p>${msg}</p><input type="password" autocomplete="off" style="width:100%"><p><button value="ok" class="pri">OK</button> <button value="x">Cancel</button></p></form>`;
+  document.body.append(d); d.showModal(); d.onclose = () => { res(d.returnValue === 'ok' ? d.querySelector('input').value : null); d.remove() };
+});
+const hashPw = async (salt, pw) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + pw)))].map(b => b.toString(16).padStart(2, '0')).join('');
+async function unlock(id) {
+  const p = store.eng[id].pw; if (!p) return true;
+  const v = await askPw(`Password for "${esc(engName(store.eng[id]))}"`);
+  if (v === null) return false;
+  if (await hashPw(p.s, v) === p.h) return true;
+  alert('Wrong password.'); return false;
+}
+async function newPw() {   // returns {s,h}, null for none, undefined if cancelled
+  for (;;) {
+    const a = await askPw('Set a password for this engagement (leave empty for none)'); if (a === null) return undefined; if (!a) return null;
+    if (a === await askPw('Type the password again')) { const s = uid(); return {s, h: await hashPw(s, a)} }
+    alert('The passwords did not match.');
+  }
+}
+async function openSafe(id) { if (await unlock(id)) openEng(id); else renderEng() }
 function addEng(s) { const id = uid(); store.eng[id] = fix(s || fresh()); openEng(id) }
 function delEng() {
   if (!confirm(`Delete engagement "${engName(S)}"? This cannot be undone (use Save project first to keep a copy).`)) return;
   S.files.forEach(f => fdel(f.id).catch(() => {}));
   ['inv', 'cm'].forEach(s => fdel('data-' + s).catch(() => {}));
   delete store.eng[store.cur];
-  const k = Object.keys(store.eng)[0];
+  const k = Object.keys(store.eng).find(i => !store.eng[i].pw);   // never opens a locked engagement without its password
   k ? openEng(k) : addEng();
 }
 const engName = s => s.meta.client || s.info?.legalName || 'Untitled engagement';
@@ -494,7 +515,7 @@ const ta = (p, v) => `<textarea data-p="${p}" rows="1">${esc(v)}</textarea>`;
 
 function vSetup() {
   return `<div class="card"><h2>Engagement</h2><div class="grid"><div><label>Engagement</label><select id="eng"></select></div><div><label>Client</label>${inp('meta.client', S.meta.client)}</div></div>
-    <p><button id="bRen">Rename</button> <button id="bNew">New engagement</button> <button id="bDel">Delete</button> <button id="bSave">Save project</button>
+    <p><button id="bRen">Rename</button> <button id="bNew">New engagement</button> <button id="bPw" title="Set, change or remove this engagement's password">Password</button> <button id="bDel">Delete</button> <button id="bSave">Save project</button>
     <label class="btn" style="display:inline-block;margin:0;color:var(--tx)" title="Opens the file as a new engagement">Open project<input id="fOpen" type="file" accept=".json" class="hid"></label></p>
     <p class="sm">Each engagement is saved in this browser. <i>Save project</i> writes a .json copy (with the PDFs); <i>Open project</i> loads one as a new engagement.</p></div>
   <div class="card"><h2>How to use</h2><ol class="mu">
@@ -1191,7 +1212,7 @@ document.addEventListener('keydown', e => {  // Alt+Down = next tab, Alt+Up = pr
 });
 const setTheme = th => { document.documentElement.dataset.theme = th; try { localStorage.setItem('eigap-theme', th) } catch (_) {} const b = document.getElementById('bTheme'); if (b) b.textContent = th === 'dark' ? '☀ Light mode' : '🌙 Dark mode' };
 { let th; try { th = localStorage.getItem('eigap-theme') } catch (_) {} setTheme(th || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) }
-document.addEventListener('click', e => {
+document.addEventListener('click', async e => {
   const t = e.target, id = t.id;
   if (t.dataset.tab) goTab(+t.dataset.tab)
   else if (id === 'bTheme') setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
@@ -1218,7 +1239,14 @@ document.addEventListener('click', e => {
   }
   else if (t.dataset.addrow) { S[t.dataset.addrow].push(newRow()); save(); render() }
   else if (t.dataset.delrow) { const [k, i] = t.dataset.delrow.split(':'); S[k].splice(+i, 1); save(); render() }
-  else if (id === 'bNew') addEng();
+  else if (id === 'bNew') { const pw = await newPw(); if (pw !== undefined) { addEng(); if (pw) { S.pw = pw; save() } } }
+  else if (id === 'bUnlock') start();
+  else if (id === 'bPw') {
+    if (S.pw && !(await unlock(store.cur))) return;
+    const pw = await newPw(); if (pw === undefined) return;
+    if (pw) S.pw = pw; else delete S.pw;
+    save(); alert(pw ? 'Password set.' : 'Password removed.');
+  }
   else if (id === 'bDel') delEng();
   else if (id === 'bAuto') { runAuto(); save(); render() }  // runAuto only touches columns not set by hand
   else if (id === 'fO') { filt.open = !filt.open; render() }
@@ -1246,7 +1274,7 @@ document.addEventListener('change', async e => {
     m.e.ex = 1; d.querySelector('summary').textContent = m.ex || '— select —'; save();
   }
   else if (t.dataset.up) { upload(t.dataset.up, [...t.files]); t.value = '' }
-  else if (t.id === 'eng') openEng(t.value);
+  else if (t.id === 'eng') openSafe(t.value);
   else if (t.id === 'fQx' && t.files[0]) { try { await importQ(t.files[0]) } catch (err) { alert('Could not read the questionnaire: ' + err.message) } t.value = '' }
   else if (t.id === 'fM') { filt.m = t.value; keep(render) }
   else if (t.id === 'fG') { filt.g = t.value; keep(render) }
@@ -1320,8 +1348,11 @@ function selfTest() {
   console.log('selfTest done');
 }
 if (location.hash === '#test') selfTest();
-render();
-restoreData();
+async function start() {
+  if (!(await unlock(store.cur))) { document.getElementById('app').innerHTML = '<div class="card"><h2>Locked</h2><p>This engagement needs its password.</p><button id="bUnlock" class="pri">Enter password</button></div>'; return }
+  render(); restoreData();
+}
+start();
 </script>
 </body>
 </html>

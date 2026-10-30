@@ -180,7 +180,7 @@ function step(d) {
   h.i = i; restoring = true; S = fix(JSON.parse(h.a[i])); save(); restoring = false;
   keep(render);
 }
-const save = () => { store.eng[store.cur] = S; try { localStorage.setItem('eigap-v2', JSON.stringify(store)) } catch (_) {} pushHist() };
+const save = () => { if (!store.cur) return; store.eng[store.cur] = S; try { localStorage.setItem('eigap-v2', JSON.stringify(store)) } catch (_) {} pushHist() };
 function openEng(id) { closeView(); SEL.clear(); store.cur = id; S = fix(store.eng[id]); WBS = {inv:null, cm:null}; SHEET = {}; DATA = {inv:null, cm:null}; filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false}; POS = {}; tab = 0; qMsg = ''; save(); render(); restoreData() }
 // per-engagement password: a salted SHA-256 hash in the engagement. shortcut: a gate on opening, the data in this browser is not encrypted; encrypt it if the PC is shared
 const askPw = msg => new Promise(res => {
@@ -210,8 +210,9 @@ async function delEng() {
   S.files.forEach(f => fdel(f.id).catch(() => {}));
   ['inv', 'cm'].forEach(s => fdel('data-' + s).catch(() => {}));
   delete store.eng[store.cur];
-  const k = Object.keys(store.eng).find(i => !store.eng[i].pw);   // never opens a locked engagement without its password
-  k ? openEng(k) : addEng();
+  store.cur = ''; S = fresh();   // no engagement open: render() shows the picker
+  try { localStorage.setItem('eigap-v2', JSON.stringify(store)) } catch (_) {}
+  render();
 }
 const engName = s => s.meta.client || s.info?.legalName || 'Untitled engagement';
 const renderEng = () => { const e = document.getElementById('eng'); if (e) e.innerHTML = Object.entries(store.eng).map(([id, s]) => `<option value="${id}"${id===store.cur?' selected':''}>${esc(engName(s))}</option>`).join('') };
@@ -677,6 +678,13 @@ function vDash() {
 }
 
 function render() {
+  if (!store.cur) {   // after a delete: choose an engagement instead of opening a blank one
+    document.getElementById('nav').innerHTML = '';
+    const o = Object.entries(store.eng).map(([id, s]) => `<option value="${id}">${esc(engName(s))}${s.pw ? ' 🔒' : ''}</option>`).join('');
+    document.getElementById('app').innerHTML = `<div class="card"><h2>Select an engagement</h2>${o ? `<select id="eng"><option value="">— select an engagement —</option>${o}</select>` : '<p>No engagements left.</p>'}
+      <p><button id="bNew" class="pri">New engagement</button> <label class="btn" style="display:inline-block;margin:0;color:var(--tx)">Open project<input id="fOpen" type="file" accept=".json" class="hid"></label></p></div>`;
+    return;
+  }
   document.getElementById('nav').innerHTML = TABS.map((t,i) => `<button class="${i==tab?'on ':''}${t[1]?'cons-only':''}" data-tab="${i}">${t[0]}</button>`).join('');
   document.getElementById('app').innerHTML = [vSetup, vCompany, vQ, vSamples, vImport, vMap, () => vDash() + vRep()][tab]();
   renderEng();
@@ -1275,7 +1283,7 @@ document.addEventListener('change', async e => {
     m.e.ex = 1; d.querySelector('summary').textContent = m.ex || '— select —'; save();
   }
   else if (t.dataset.up) { upload(t.dataset.up, [...t.files]); t.value = '' }
-  else if (t.id === 'eng') openSafe(t.value);
+  else if (t.id === 'eng') { if (t.value) openSafe(t.value) }
   else if (t.id === 'fQx' && t.files[0]) { try { await importQ(t.files[0]) } catch (err) { alert('Could not read the questionnaire: ' + err.message) } t.value = '' }
   else if (t.id === 'fM') { filt.m = t.value; keep(render) }
   else if (t.id === 'fG') { filt.g = t.value; keep(render) }

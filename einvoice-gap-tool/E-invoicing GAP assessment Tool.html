@@ -185,7 +185,7 @@ function step(d) {
   keep(render);
 }
 const save = () => { if (!store.cur) return; store.eng[store.cur] = S; try { localStorage.setItem('eigap-v2', JSON.stringify(store)) } catch (_) {} pushHist() };
-function openEng(id) { closeView(); SEL.clear(); store.cur = id; S = fix(store.eng[id]); WBS = {inv:null, cm:null}; SHEET = {}; DATA = {inv:null, cm:null}; filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false}; POS = {}; tab = 0; qMsg = ''; save(); render(); restoreData() }
+function openEng(id) { closeView(); SEL.clear(); store.cur = id; S = fix(store.eng[id]); WBS = {inv:null, cm:null}; SHEET = {}; DATA = {inv:null, cm:null}; filt = {q:'', m:'', g:'', c:'', s:'', k:'', d:''}; POS = {}; tab = 0; qMsg = ''; save(); render(); restoreData() }
 function addEng(s) { const id = uid(); store.eng[id] = fix(s || fresh()); openEng(id) }
 function delEng() {
   if (!confirm(`Delete engagement "${engName(S)}"? This cannot be undone (use Save project first to keep a copy).`)) return;
@@ -198,7 +198,7 @@ function delEng() {
 }
 const engName = s => s.meta.client || s.info?.legalName || 'Untitled engagement';
 const renderEng = () => { const e = document.getElementById('eng'); if (e) e.innerHTML = Object.entries(store.eng).map(([id, s]) => `<option value="${id}"${id===store.cur?' selected':''}>${esc(engName(s))}</option>`).join('') };
-let tab = 0, WBS = {inv:null, cm:null}, SHEET = {}, qMsg = '', filt = {q:'', m:'', g:'', c:'', s:'', k:'', open:false};
+let tab = 0, WBS = {inv:null, cm:null}, SHEET = {}, qMsg = '', filt = {q:'', m:'', g:'', c:'', s:'', k:'', d:''};
 
 // ---------- auto-match ----------
 const SYN = {client:'buyer',no:'number',num:'number',nbr:'number',id:'number',identifier:'number',dt:'date',amt:'amount',qty:'quantity',cust:'buyer',customer:'buyer',trx:'transaction',curr:'currency',vat:'tax',desc:'description',addr:'address',inv:'invoice',ref:'reference'};
@@ -550,7 +550,7 @@ const colMatch = f => { const m = S.map[f.n];
 const optx = (list, v, extra) => `<option value="">All</option><option value="@none"${v==='@none'?' selected':''}>${extra}</option>` + list.map(x => `<option${x==v?' selected':''}>${esc(x)}</option>`).join('');
 function rows() {
   const t = filt.q.toLowerCase();
-  return D.F.filter(f => (!filt.m || f.m===filt.m) && (!filt.g || f.g===filt.g) && (!t || (f.f+' '+f.g).toLowerCase().includes(t)) && (!filt.open || !S.map[f.n].ok) && colMatch(f));
+  return D.F.filter(f => (!filt.m || f.m===filt.m) && (!filt.g || f.g===filt.g) && (!t || (f.f+' '+f.g).toLowerCase().includes(t)) && (!filt.d || !!S.map[f.n].ok === (filt.d === 'done')) && colMatch(f));
 }
 // multi-select over this field's lookup list; options are built only when the box is opened (the UOM list has 2,000+ entries)
 const sel = m => m.ex.split(',').map(x => x.trim()).filter(Boolean);
@@ -630,7 +630,7 @@ function vMap() {
     <div><label>Sample column</label><select id="fC">${colOpts(filt.c, `<option value="">All</option><option value="@none"${filt.c === '@none' ? ' selected' : ''}>Not Available (unmapped)</option>`)}</select></div>
     <div><label>Map status</label><select id="fS">${optx(ST, filt.s, '— not reviewed —')}</select></div>
     <div><label>Code</label><select id="fK">${optx(Object.keys(RC), filt.k, '— no code —')}</select></div>
-    <div style="flex:none"><label>&nbsp;</label><button id="fO" style="white-space:nowrap">${filt.open?'Unconfirmed only ✔':'Unconfirmed only'}</button></div></div>
+    <div><label>Done</label><select id="fD"><option value="">All</option><option value="done"${filt.d==='done'?' selected':''}>Done</option><option value="todo"${filt.d==='todo'?' selected':''}>Not done</option></select></div></div>
     <div class="bulk"><b id="selN">${selNote()}</b> <button id="bSelAll" title="Ticks every row matching the filters above">Select filtered rows</button> <button id="bSelNone" title="Unticks the rows the filters currently show; ticks on hidden rows stay">Clear</button> <button id="bBulk" class="pri">Apply to selected</button>
       <select id="bulkCol" title="Sample column for the selected rows"><option value="@keep">Sample column: unchanged</option><option value="">Not Available</option><option value="${PDF}">Available in PDF</option></select>
       <select id="bulkSt" title="Map status for the selected rows">${opt(ST, '@keep', 'Map status: unchanged').replace('<option value="">','<option value="@keep">')}</select>
@@ -1057,7 +1057,7 @@ function slides() {
   // 3 business overview & scope
   const docs = D.docs.filter((d, i) => /^(Yes|Partial)$/.test(S.doc[i].r) && !S.doc[i].h).map(d => d[1]).join(', ');
   add('Business Overview & Assessment Scope', 'Business profile, transaction landscape and assessment coverage', [T(.5, 1.4, 12.3, 1.2, tx(nv('profile')), {size:12, lh:1.4}),
-    TB(.5, 2.75, [3.4, 8.9], ['Scope Item', 'Coverage'], [['FTA field analysis', {t:`${st.rows.length - st.open} fields assessed (${st.app.length} applicable: ${st.critM + st.nonM} Mandatory + ${st.critCM + st.nonCM} CM; ${st.nonO} optional)`, b:1}],
+    TB(.5, 2.75, [3.4, 8.9], ['Scope Item', 'Coverage'], [['FTA field analysis', {t:`${st.rows.filter(r => r.m.ok).length} fields assessed (${st.app.length} applicable: ${st.critM + st.nonM} Mandatory + ${st.critCM + st.nonCM} CM; ${st.nonO} optional)`, b:1}],
       ['Critical gaps', {t:`${st.crit.length} – new ERP fields required`, c:CL.red, b:1}], ['Non-critical gaps', {t:`${st.non.length} (mapping – ${st.non.length - st.asp} and ASP default / derive – ${st.asp})`, b:1}],
       ['Documents reviewed', cut(docs, 200) || '–'], ['Client questionnaires', 'E-invoicing checklist, documents list and transaction-scenario questionnaire'],
       ['Business scenarios', `${S.sc.filter(x => x.r).length} scenarios + 5 tax categories reviewed`]], {rowH:.55})]);
@@ -1243,7 +1243,6 @@ document.addEventListener('click', e => {
   else if (id === 'bNew') addEng();
   else if (id === 'bDel') delEng();
   else if (id === 'bAuto') { runAuto(); save(); render() }  // runAuto only touches columns not set by hand
-  else if (id === 'fO') { filt.open = !filt.open; render() }
   else if (id === 'bCkBlank') exportChecklist(false);
   else if (id === 'bCkFilled') exportChecklist(true);
   else if (id === 'bXlsx') exportXlsx();
@@ -1274,6 +1273,7 @@ document.addEventListener('change', async e => {
   else if (t.id === 'fG') { filt.g = t.value; keep(render) }
   else if (t.id === 'fC') { filt.c = t.value; keep(render) }
   else if (t.id === 'fS') { filt.s = t.value; keep(render) }
+  else if (t.id === 'fD') { filt.d = t.value; keep(render) }
   else if (t.id === 'fK') { filt.k = t.value; keep(render) }
   else if ((t.id === 'fSample' || t.id === 'fCm') && t.files[0]) { try { await loadSample(t.id === 'fCm' ? 'cm' : 'inv', t.files[0]) } catch (err) { alert('Could not read the file: ' + err.message) } }
   else if (t.id === 'sSheet' || t.id === 'sSheetCm') readSheet(t.id === 'sSheet' ? 'inv' : 'cm', t.value);

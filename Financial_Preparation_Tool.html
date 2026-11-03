@@ -664,7 +664,7 @@ class Renderer {
       for (let r = r1; r <= r2 && !nz; r++) for (let c = a[0]; c <= a[2]; c++) { const v = this.B.get(sh, FE.colL(c) + r); if (typeof v === 'number' && Math.abs(v) > 0.0001) { nz = true; break; } }
       if (!nz) for (let r = r1; r <= r2; r++) hs.add(r);
     }
-    if (sh === 'Schedules') for (const n of this.ctx.noteRanges) if (this.ctx.report ? !n.on : n.off) for (let r = n.r1; r <= n.r2; r++) hs.add(r);
+    if (sh === 'Schedules') for (const n of this.ctx.noteRanges) if (this.ctx.report && !n.on) for (let r = n.r1; r <= n.r2; r++) hs.add(r);
     if (sh === 'B. Sht' && !this.ctx.noteOn('intang')) { hs.add(12); }
     if (sh === 'Contents') { if (!this.ctx.inc.director) { hs.add(13); hs.add(14); } if (!this.ctx.inc.audit) { hs.add(15); hs.add(16); } }
     if (this.ctx.report && this.ctx.userHidden && this.ctx.userHidden[sh]) { const info2 = this.sheetInfo(sh); for (const r0 of this.ctx.userHidden[sh]) { hs.add(r0); for (const [k, m] of Object.entries(info2.merges)) { if (+k.replace(/[A-Z]+/, '') === r0) for (let q = r0; q <= m.r2; q++) hs.add(q); } } }
@@ -804,7 +804,7 @@ class Renderer {
       tds += `<td${cls ? ` class="${cls.trim()}"` : ''} data-a="${addr}"${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''} style="${css}">${inner}</td>`;
       c += adv;
     }
-    const uh = this.ctx.userHidden && this.ctx.userHidden[sh] && this.ctx.userHidden[sh].has(r);
+    const uh = (this.ctx.userHidden && this.ctx.userHidden[sh] && this.ctx.userHidden[sh].has(r)) || (!this.ctx.report && sh === 'Schedules' && (this.ctx.noteRanges || []).some(n => n.off && r >= n.r1 && r <= n.r2)); // hidden notes stay visible (greyed) in the editor so they can be restored
     return `<tr data-r="${r}"${uh ? ' class="uhid"' : ''} style="height:${Math.max(rh, 3).toFixed(1)}px">${tds}</tr>`;
   }
   colgroup(sh, sc) { const a = this.m.sheets[sh].area; let h = '<colgroup>'; for (let c = a[0]; c <= a[2]; c++) { const w = this.colW(sh, c); if (w) h += `<col style="width:${(w * sc).toFixed(1)}px">`; } return h + '</colgroup>'; }
@@ -1786,7 +1786,7 @@ document.addEventListener('mouseover', e => {
   const sh = tr.closest('table').dataset.sh; const tb = tr.getBoundingClientRect(), wb = wrap.getBoundingClientRect();
   ctl.dataset.sh = sh; ctl.dataset.r = tr.dataset.r || ''; ctl.dataset.add = tr.dataset.add || '';
   const hid = tr.classList.contains('uhid');
-  ctl.innerHTML = tr.dataset.add ? '<b data-act="addEdit" title="Edit this added line">✎</b><b data-act="addDel" title="Delete this added line">✕</b>' : `<b data-act="rowAdd" title="Add a line below this row">＋</b><b data-act="rowHide" title="${hid ? 'Restore this line' : 'Hide this line from the report'}">${hid ? '↺' : '✕'}</b><b data-act="noteHide" title="Hide / restore the entire note this line belongs to">⊟</b>`;
+  ctl.innerHTML = tr.dataset.add ? '<b data-act="addEdit" title="Edit this added line">✎</b><b data-act="addDel" title="Delete this added line">✕</b>' : `<b data-act="rowAdd" title="Add a line below this row">＋</b><b data-act="rowHide" title="${hid ? 'Restore this line' : 'Hide this line from the report'}">${hid ? '↺' : '✕'}</b><b data-act="noteHide" title="${hid ? 'Restore the entire note' : 'Hide the entire note this line belongs to'}">${hid ? '↺ note' : '⊟'}</b>`;
   ctl.style.top = (tb.top - wb.top + wrap.scrollTop) + 'px'; ctl.style.left = (wrap.scrollLeft + 4) + 'px'; ctl.style.display = 'flex';
 });
 

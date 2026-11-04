@@ -152,6 +152,7 @@ details.ms summary{min-height:var(--h-ctl);padding:7px 11px;border-color:var(--b
 details.ms summary:hover{border-color:var(--mu)}
 details>summary{cursor:pointer;font-weight:500;padding:6px 2px}
 .msb{border-radius:var(--r-md);box-shadow:var(--sh-2)}
+details.ms summary{white-space:pre-line}
 dialog{border:1px solid var(--bd);border-radius:var(--r-lg);background:var(--card);color:var(--tx);box-shadow:var(--sh-2);padding:18px}
 /* narrative editor cells */
 details table textarea{min-height:60px}
@@ -741,7 +742,15 @@ function rows() {
 const sel = m => m.ex.split(',').map(x => x.trim()).filter(Boolean);
 const flagsOn = (v, c) => /^[01]{8}$/.test(v) && [...c].every((b, i) => b === '0' || v[i] === '1');   // list code c is contained in the flag string v
 const flagSet = (v, c, on) => { const a = /^[01]{8}$/.test(v) ? [...v] : [...'00000000']; [...c].forEach((b, i) => { if (b === '1') a[i] = on ? '1' : '0' }); const r = a.join(''); return r === '00000000' ? '' : r };
-const msBox = (f, m) => `<details class="ms" data-n="${f.n}"><summary>${esc(m.ex) || '— select —'}</summary><div class="msb"><div class="sm">${esc(D.LK[f.lk].t)}</div><input class="msq" placeholder="Filter…"><div class="msl"></div></div></details>`;
+// the selected codes with their descriptions (the stored value stays the codes; the transaction type is one flag string)
+function exDesc(f, ex) {
+  const v = String(ex ?? '').trim(), o = D.LK[f.lk]?.o;
+  if (!v || !o) return v;
+  const name = c => { const x = o.find(y => String(y[0]) === c); return x ? String(x[1]) : '' };
+  if (f.lk === '30') { const n = v === '00000000' ? ['Standard tax invoice'] : o.filter(([c]) => c !== '00000000' && flagsOn(v, c)).map(([, l]) => String(l).split(/\s*-\s+/)[0]); return n.length ? `${v} – ${n.join(' + ')}` : v }
+  return v.split(',').map(x => x.trim()).filter(Boolean).map(c => name(c) ? `${c} – ${cut(name(c), 80)}` : c).join('\n');
+}
+const msBox = (f, m) => `<details class="ms" data-n="${f.n}"><summary>${esc(exDesc(f, m.ex)) || '— select —'}</summary><div class="msb"><div class="sm">${esc(D.LK[f.lk].t)}</div><input class="msq" placeholder="Filter…"><div class="msl"></div></div></details>`;
 function fillMs(d, q = '') {
   const f = D.F.find(x => x.n == d.dataset.n), s = q.toLowerCase(), v0 = S.map[f.n].ex.trim(), on = f.lk === '30' ? new Set(D.LK['30'].o.map(o => o[0]).filter(c => flagsOn(v0, c))) : new Set(sel(S.map[f.n]));
   const o = D.LK[f.lk].o.filter(([c, l]) => on.has(c) || !s || (c + ' ' + l).toLowerCase().includes(s));
@@ -867,10 +876,10 @@ function render() {
 }
 
 // ---------- export ----------
-const GAPH = ['Sr. No.','FTA#','Mandatory as per FTA','Grouping','Data Dictionary Field','Field Description','Examples','ASP Mandatory','List Values','Required in Input','Usage','Sample Data Field Name','Map Status','Gap identified','Detailed Recommendation (Custom Consultation)','Example','Remarks','Recommendation code','General Recommendation','DDA Mapping ','Table Name.Filed Name'];
+const GAPH = ['Sr. No.','FTA#','Mandatory as per FTA','Grouping','Data Dictionary Field','Field Description','Examples','ASP Mandatory','List Values','Required in Input','Usage','Sample Data Field Name','Map Status','Gap identified','Detailed Recommendation (Custom Consultation)','Example','Remarks','Recommendation code','General Recommendation','DDA Mapping ','Table Name.Filed Name','Example (Description)'];
 function gapRows() {
   return D.F.map(f => { const m = S.map[f.n];
-    return [f.n, f.fta, f.m, f.g, f.f, f.d, f.ex, f.am, f.lv, f.ri, f.u || 'UAE PINT', colLabel(m.col) || 'Not Available', m.st, m.gap, m.rec, m.ex, m.rem, m.code, RC[m.code] || '', '', ''] });
+    return [f.n, f.fta, f.m, f.g, f.f, f.d, f.ex, f.am, f.lv, f.ri, f.u || 'UAE PINT', colLabel(m.col) || 'Not Available', m.st, m.gap, m.rec, m.ex, m.rem, m.code, RC[m.code] || '', '', '', f.lk ? exDesc(f, m.ex) : ''] });
 }
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000) }
 const base = () => (S.meta.client || 'Client').replace(/[^\w-]+/g, '_') + '_E-Invoicing_Gap_Assessment';
@@ -931,8 +940,8 @@ async function exportXlsx(macro) {  // macro: .xlsm whose Example dropdowns pick
 
   // Detailed-Gap-Analysis
   const ws = wb.addWorksheet('Detailed-Gap-Analysis', {properties:{tabColor:{argb:'FF548235'}}, views:[{state:'frozen', ySplit:1, zoomScale:80}]});
-  const W = [16.4, 14.5, 25.1, 36, 34, 100.1, 29.1, 21.6, 14.9, 21.1, 11, 14.6, 16.5, 28.5, 43, 13, 13, 15.9, 34.1, 29.9, 47.5];
-  const HF = ['D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'FFE699', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'FBE5D6', 'FBE5D6', 'FBE5D6', 'FBE5D6', 'FBE5D6', 'FBE5D6', '92D050', '92D050', '8EA9DB', '8EA9DB'];
+  const W = [16.4, 14.5, 25.1, 36, 34, 100.1, 29.1, 21.6, 14.9, 21.1, 11, 14.6, 16.5, 28.5, 43, 13, 13, 15.9, 34.1, 29.9, 47.5, 48];
+  const HF = ['D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'FFE699', 'D9E1F2', 'D9E1F2', 'D9E1F2', 'FBE5D6', 'FBE5D6', 'FBE5D6', 'FBE5D6', 'FBE5D6', 'FBE5D6', '92D050', '92D050', '8EA9DB', '8EA9DB', 'FBE5D6'];
   const DF = {E:'F8CBAD', F:'FFFFFF', G:'FFFFFF', L:'92D050'}, HW = 'CDJLMNOPQRS', DW = 'EFGHILMNO';
   ws.columns = W.map(width => ({width}));
   GAPH.forEach((h, i) => { const c = ws.getCell(1, i + 1); c.value = h; c.font = {name:'Dubai', size:11, bold:true}; c.fill = fill(HF[i]); c.border = box; c.alignment = {horizontal:'center', vertical:'middle', wrapText:true} });  // no fixed row heights: Excel fits them to the wrapped text
@@ -960,7 +969,7 @@ async function exportXlsx(macro) {  // macro: .xlsm whose Example dropdowns pick
       c.font = {name:j < 18 ? 'Dubai' : 'Calibri', size:11};
       if (j === 15) c.numFmt = '@';  // text format keeps codes such as 00000100 intact when picked from the dropdown
       c.alignment = {horizontal:j < 19 ? 'center' : undefined, vertical:j < 19 ? 'center' : undefined, wrapText:true};
-      if (j < 19) c.border = box;
+      if (j < 19 || j === 21) c.border = box;
       if (DF[L]) c.fill = fill(DF[L]);
     });
     ws.getCell(rr, 13).dataValidation = {type:'list', allowBlank:true, formulae:[`Summary!$B$10:$B$${9 + ST.length}`], showErrorMessage:true, errorTitle:'Map Status', error:'Pick a status from the list.'};
@@ -1498,7 +1507,7 @@ document.addEventListener('change', async e => {
   if (t.dataset.ms !== undefined) {
     const d = t.closest('.ms'), m = S.map[d.dataset.n], v = sel(m), tx = D.F.find(x => x.n == d.dataset.n).lk === '30';
     m.ex = tx ? flagSet(m.ex.trim(), t.dataset.ms, t.checked) : (t.checked ? [...v, t.dataset.ms] : v.filter(x => x !== t.dataset.ms)).join(', ');  // transaction type: one combined flag string
-    m.e.ex = 1; d.querySelector('summary').textContent = m.ex || '— select —'; save();
+    m.e.ex = 1; d.querySelector('summary').textContent = exDesc(D.F.find(x => x.n == d.dataset.n), m.ex) || '— select —'; save();
   }
   else if (t.dataset.up) { upload(t.dataset.up, [...t.files]); t.value = '' }
   else if (t.id === 'eng') { if (t.value) openEng(t.value) }

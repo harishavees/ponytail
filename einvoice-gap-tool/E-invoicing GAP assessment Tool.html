@@ -747,7 +747,11 @@ function exDesc(f, ex) {
   const v = String(ex ?? '').trim(), o = D.LK[f.lk]?.o;
   if (!v || !o) return v;
   const name = c => { const x = o.find(y => String(y[0]) === c); return x ? String(x[1]) : '' };
-  if (f.lk === '30') { const n = v === '00000000' ? ['Standard tax invoice'] : o.filter(([c]) => c !== '00000000' && flagsOn(v, c)).map(([, l]) => String(l).split(/\s*-\s+/)[0]); return n.length ? `${v} – ${n.join(' + ')}` : v }
+  if (f.lk === '30') {   // one line per ticked flag; with several, the stored combined flag is added last
+    if (v === '00000000') return `${v} – Standard tax invoice`;
+    const n = o.filter(([c]) => c !== '00000000' && flagsOn(v, c)).map(([c, l]) => `${c} – ${String(l).split(/\s*-\s+/)[0]}`);
+    return n.length > 1 ? [...n, `Combined: ${v}`].join('\n') : n[0] || v;
+  }
   return v.split(',').map(x => x.trim()).filter(Boolean).map(c => name(c) ? `${c} – ${cut(name(c), 80)}` : c).join('\n');
 }
 const msBox = (f, m) => `<details class="ms" data-n="${f.n}"><summary>${esc(exDesc(f, m.ex)) || '— select —'}</summary><div class="msb"><div class="sm">${esc(D.LK[f.lk].t)}</div><input class="msq" placeholder="Filter…"><div class="msl"></div></div></details>`;
